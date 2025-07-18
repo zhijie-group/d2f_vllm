@@ -1,0 +1,23 @@
+[project]
+name = "d2f"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "accelerate>=1.9.0",
+    "datasets>=4.0.0",
+    "flash-attn>=2.8.1",
+    "lm-eval>=0.4.9",
+    "numpy>=2.3.1",
+    "peft>=0.16.0",
+    "pip>=25.1.1",
+    "setuptools>=80.9.0",
+    "torch>=2.7.1",
+    "tqdm>=4.67.1",
+    "transformers>=4.53.2",
+]
+
+[[tool.uv.index]]
+url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple"
+default = true
