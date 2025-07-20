@@ -1,0 +1,17 @@
+compute_environment: LOCAL_MACHINE
+debug: false
+distributed_type: NO
+downcast_bf16: 'no'
+enable_cpu_affinity: true
+gpu_ids: '0'  # 指定使用 GPU 0，与 CUDA_VISIBLE_DEVICES=0 对应
+machine_rank: 0
+main_training_function: main
+mixed_precision: bf16  # 与 dtype="bfloat16" 对应
+num_machines: 1
+num_processes: 1  # 单进程运行
+rdzv_backend: static
+same_network: true
+tpu_env: []
+tpu_use_cluster: false
+tpu_use_sudo: false
+use_cpu: false

@@ -1,8 +1,9 @@
 from copy import copy
 from enum import Enum, auto
 from itertools import count
+from dataclasses import dataclass
 
-from dvllm.sampling_params import SamplingParams
+from d2f_vllm.sampling_params import SamplingParams
 
 
 class SequenceStatus(Enum):
@@ -27,6 +28,12 @@ class Sequence:
         self.temperature = sampling_params.temperature
         self.max_tokens = sampling_params.max_tokens
         self.ignore_eos = sampling_params.ignore_eos
+        
+    def __repr__(self):
+        return (f"Sequence(block_size={self.block_size}, counter={self.counter}, "
+                f"seq_id={self.seq_id}, status={self.status.name}, num_tokens={self.num_tokens}, "
+                f"num_prompt_tokens={self.num_prompt_tokens}, num_cached_tokens={self.num_cached_tokens}, "
+                f"temperature={self.temperature}, max_tokens={self.max_tokens}, ignore_eos={self.ignore_eos})")
 
     def __len__(self):
         return self.num_tokens
@@ -64,7 +71,7 @@ class Sequence:
 
     def block(self, i):
         assert 0 <= i < self.num_blocks
-        return self.token_ids[i*self.block_size: (i+1)*self.block_size]
+        return self.token_ids[i * self.block_size: (i + 1) * self.block_size]
 
     def append_token(self, token_id: int):
         self.token_ids.append(token_id)

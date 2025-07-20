@@ -1,17 +1,19 @@
-from collections import deque
 import xxhash
 import numpy as np
 
-from dvllm.engine.sequence import Sequence
+from collections import deque
+from dataclasses import dataclass, field
+from typing import List, Dict, Deque, Set
+
+from d2f_vllm.engine.sequence import Sequence
 
 
+@dataclass
 class Block:
-
-    def __init__(self, block_id):
-        self.block_id = block_id
-        self.ref_count = 0
-        self.hash = -1
-        self.token_ids = []
+    block_id: int
+    ref_count: int = 0
+    hash: int = -1
+    token_ids: List[int] = field(default_factory=list)
 
     def update(self, hash: int, token_ids: list[int]):
         self.hash = hash
@@ -24,17 +26,16 @@ class Block:
 
 
 class BlockManager:
-
     def __init__(self, num_blocks: int, block_size: int):
         assert num_blocks > 0
         self.block_size = block_size
-        self.blocks: list[Block] = [Block(i) for i in range(num_blocks)]
-        self.hash_to_block_id: dict[int, int] = dict()
-        self.free_block_ids: deque[int] = deque(range(num_blocks))
-        self.used_block_ids: set[int] = set()
+        self.blocks: List[Block] = [Block(block_id=i) for i in range(num_blocks)]
+        self.hash_to_block_id: Dict[int, int] = dict()
+        self.free_block_ids: Deque[int] = deque(range(num_blocks))
+        self.used_block_ids: Set[int] = set()
 
     @classmethod
-    def compute_hash(cls, token_ids: list[int], prefix: int = -1):
+    def compute_hash(cls, token_ids: List[int], prefix: int = -1):
         h = xxhash.xxh64()
         if prefix != -1:
             h.update(prefix.to_bytes(8, "little"))

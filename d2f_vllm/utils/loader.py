@@ -1,7 +1,9 @@
 import os
-from glob import glob
 import torch
-from torch import nn
+import torch.nn as nn
+
+from tqdm import tqdm
+from glob import glob
 from safetensors import safe_open
 
 
@@ -11,7 +13,7 @@ def default_weight_loader(param: nn.Parameter, loaded_weight: torch.Tensor):
 
 def load_model(model: nn.Module, path: str):
     packed_modules_mapping = getattr(model, "packed_modules_mapping", {})
-    for file in glob(os.path.join(path, "*.safetensors")):
+    for file in tqdm(glob(os.path.join(path, "*.safetensors"))):
         with safe_open(file, "pt", "cpu") as f:
             for weight_name in f.keys():
                 for k in packed_modules_mapping:

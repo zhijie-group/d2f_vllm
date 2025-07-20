@@ -12,11 +12,15 @@ dependencies = [
     "numpy>=2.3.1",
     "peft>=0.16.0",
     "pip>=25.1.1",
+    "pyyaml>=6.0.2",
     "setuptools>=80.9.0",
     "torch>=2.7.1",
     "tqdm>=4.67.1",
     "transformers>=4.53.2",
 ]
+
+[tool.setuptools.packages.find]
+include = ["d2f_vllm"]
 
 [[tool.uv.index]]
 url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple"

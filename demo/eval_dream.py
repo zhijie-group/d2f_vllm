@@ -249,6 +249,17 @@ class DreamLoRA(LM):
         assert isinstance(batch_size, (int, str))
 
         gpus = torch.cuda.device_count()
+        # 获取可用的CUDA设备ID列表
+        available_device_ids = list(range(gpus)) if gpus > 0 else []
+        eval_logger.info(f"Available CUDA devices: {gpus} devices with IDs: {available_device_ids}")
+        
+        # 如果设置了CUDA_VISIBLE_DEVICES，显示可见设备
+        import os
+        cuda_visible_devices = os.environ.get('CUDA_VISIBLE_DEVICES', None)
+        if cuda_visible_devices:
+            visible_device_ids = [int(x) for x in cuda_visible_devices.split(',') if x.strip()]
+            eval_logger.info(f"CUDA_VISIBLE_DEVICES: {visible_device_ids}")
+        
         accelerator_kwargs = InitProcessGroupKwargs(timeout=timedelta(weeks=52))
         accelerator = Accelerator(kwargs_handlers=[accelerator_kwargs])
         if accelerator.num_processes > 1:
@@ -262,7 +273,7 @@ class DreamLoRA(LM):
             # use user-passed device
             device_list = set(
                 ["cuda", "cpu"]
-                + [f"cuda:{i}" for i in range(gpus)]
+                + [f"cuda:{visible_device_ids[i]}" for i in range(gpus)]
                 + ["mps", "mps:0"]
                 + [f"npu:{i}" for i in range(gpus)]
             )
@@ -517,6 +528,7 @@ class DreamLoRA(LM):
         # 对每个prompt单独生成（块生成方式通常单个处理）
         for i, prompt in enumerate(prompts):
             # tokenize
+            # 1. tokenize并首次prefill
             prompt_ids = self.tokenizer.encode(prompt)
             prompt_tensor = torch.tensor([prompt_ids], device=self.device, dtype=torch.long)
             
@@ -550,7 +562,7 @@ class DreamLoRA(LM):
         
         # 预生成完整的attention mask，使用模型的数据类型
         prompt_length = prompt.shape[1]
-        full_attention_mask = create_full_block_attention_mask(
+        full_attention_mask = create_full_block_attention_mask( # 可优化
             prompt_length=prompt_length,
             max_length=self.max_length,
             block_size=block_size,
@@ -589,8 +601,11 @@ class DreamLoRA(LM):
                 # 检查是否需要添加新块
                 if len(block_states)-1 < (self.max_new_tokens // block_size) and not eos_detected:
                     last_block_id = len(block_states) - 1
-                    current_progress = (block_states[last_block_id]['total_masks'] - 
-                                      block_states[last_block_id]['mask_count']) / block_states[last_block_id]['total_masks']
+                    current_progress = (
+                        (block_states[last_block_id]['total_masks'] - 
+                         block_states[last_block_id]['mask_count']) /  
+                        block_states[last_block_id]['total_masks']
+                    )
                     if current_progress >= block_add_threshold:
                         # 添加新块 - 默认为不完全状态
                         new_block_id = len(block_states)

@@ -1,14 +1,19 @@
 import torch
 from torch import nn
 import torch.distributed as dist
-from transformers import Qwen3Config
 
-from dvllm.layers.activation import SiluAndMul
-from dvllm.layers.attention import Attention
-from dvllm.layers.layernorm import RMSNorm
-from dvllm.layers.linear import QKVParallelLinear, MergedColumnParallelLinear, RowParallelLinear
-from dvllm.layers.rotary_embedding import get_rope
-from dvllm.layers.embed_head import VocabParallelEmbedding, ParallelLMHead
+from d2f_vllm.layers.activation import SiluAndMul
+from d2f_vllm.layers.attention import Attention
+from d2f_vllm.layers.layernorm import RMSNorm
+from d2f_vllm.layers.linear import QKVParallelLinear, MergedColumnParallelLinear, RowParallelLinear
+from d2f_vllm.layers.rotary_embedding import get_rope
+from d2f_vllm.layers.embed_head import VocabParallelEmbedding, ParallelLMHead
+from d2f_vllm.models.config.dream import DreamConfig
+
+
+class DreamRMSNorm(RMSNorm):
+    def __init__(self, hidden_size, eps = 0.000001):
+        super().__init__(hidden_size, eps)
 
 
 class Qwen3Attention(nn.Module):
@@ -114,11 +119,10 @@ class Qwen3MLP(nn.Module):
         return x
 
 
-class Qwen3DecoderLayer(nn.Module):
-
+class DreamDecoderLayer(nn.Module):
     def __init__(
         self,
-        config: Qwen3Config,
+        config: DreamConfig,
     ) -> None:
         super().__init__()
         self.self_attn = Qwen3Attention(
@@ -157,16 +161,16 @@ class Qwen3DecoderLayer(nn.Module):
         return hidden_states, residual
 
 
-class Qwen3Model(nn.Module):
+class DreamModel(nn.Module):
 
     def __init__(
         self,
-        config: Qwen3Config,
+        config: DreamConfig,
     ) -> None:
         super().__init__()
         self.embed_tokens = VocabParallelEmbedding(config.vocab_size, config.hidden_size)
-        self.layers = nn.ModuleList([Qwen3DecoderLayer(config) for _ in range(config.num_hidden_layers)])
-        self.norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.layers = nn.ModuleList([DreamDecoderLayer(config) for _ in range(config.num_hidden_layers)])
+        self.norm = DreamRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 
     def forward(
         self,
@@ -181,7 +185,7 @@ class Qwen3Model(nn.Module):
         return hidden_states
 
 
-class Qwen3ForCausalLM(nn.Module):
+class DreamForDLM(nn.Module):
     packed_modules_mapping = {
         "q_proj": ("qkv_proj", "q"),
         "k_proj": ("qkv_proj", "k"),
@@ -192,10 +196,10 @@ class Qwen3ForCausalLM(nn.Module):
 
     def __init__(
         self,
-        config: Qwen3Config
+        config: DreamConfig,
     ) -> None:
         super().__init__()
-        self.model = Qwen3Model(config)
+        self.model = DreamModel(config)
         self.lm_head = ParallelLMHead(config.vocab_size, config.hidden_size)
         if config.tie_word_embeddings:
             self.lm_head.weight.data = self.model.embed_tokens.weight.data

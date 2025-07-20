@@ -493,6 +493,8 @@ class DreamSdpaAttention(DreamAttention):
         attn_output = self.o_proj(attn_output)
 
         return attn_output, None, past_key_value
+    
+
 class DreamFlexAttention(DreamAttention):
     """
     Dream attention module using torch.nn.functional.scaled_dot_product_attention. This module inherits from
@@ -564,7 +566,7 @@ class DreamFlexAttention(DreamAttention):
                 new_key_states, new_value_states = past_key_value.update(key_states[:,:,:update_kvcache, :], value_states[:,:,:update_kvcache, : ], self.layer_idx, cache_kwargs)
                 # print("new_kv",new_key_states.shape,new_value_states.shape)
                 # print("k,v",new_key_states.shape,new_value_states.shape)
-                key_states = torch.cat([new_key_states,key_states[:,:,update_kvcache:,:]], dim=2)
+                key_states = torch.cat([new_key_states, key_states[:,:,update_kvcache:,:]], dim=2)
                 value_states = torch.cat([new_value_states,value_states[:,:,update_kvcache:,:]], dim=2)
                 # print("k,v",key_states.shape,value_states.shape)
         # print(key_states.shape,value_states.shape)

@@ -1,15 +1,17 @@
 import atexit
+
+import torch.multiprocessing as mp
+
 from dataclasses import fields
 from time import perf_counter
 from tqdm.auto import tqdm
 from transformers import AutoTokenizer
-import torch.multiprocessing as mp
 
-from dvllm.config import Config
-from dvllm.sampling_params import SamplingParams
-from dvllm.engine.sequence import Sequence
-from dvllm.engine.scheduler import Scheduler
-from dvllm.engine.model_runner import ModelRunner
+from d2f_vllm.config import Config
+from d2f_vllm.sampling_params import SamplingParams
+from d2f_vllm.engine.sequence import Sequence
+from d2f_vllm.engine.scheduler import Scheduler
+from d2f_vllm.engine.model_runner import ModelRunner
 
 
 class LLMEngine:
@@ -39,7 +41,7 @@ class LLMEngine:
         for p in self.ps:
             p.join()
 
-    def add_request(self, prompt: str | list[int], sampling_params: SamplingParams):
+    def _add_request(self, prompt: str | list[int], sampling_params: SamplingParams):
         if isinstance(prompt, str):
             prompt = self.tokenizer.encode(prompt)
         seq = Sequence(prompt, sampling_params)
@@ -67,7 +69,7 @@ class LLMEngine:
         if not isinstance(sampling_params, list):
             sampling_params = [sampling_params] * len(prompts)
         for prompt, sp in zip(prompts, sampling_params):
-            self.add_request(prompt, sp)
+            self._add_request(prompt, sp)
         outputs = {}
         prefill_throughput = decode_throughput = 0.
         while not self.is_finished():

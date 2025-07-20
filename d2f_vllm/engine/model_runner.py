@@ -4,12 +4,12 @@ import torch.distributed as dist
 from multiprocessing.synchronize import Event
 from multiprocessing.shared_memory import SharedMemory
 
-from dvllm.config import Config
-from dvllm.engine.sequence import Sequence
-from dvllm.models.qwen3 import Qwen3ForCausalLM
-from dvllm.layers.sampler import Sampler
-from dvllm.utils.context import set_context, get_context, reset_context
-from dvllm.utils.loader import load_model
+from d2f_vllm.config import Config
+from d2f_vllm.engine.sequence import Sequence
+from d2f_vllm.models.qwen3 import Qwen3ForCausalLM
+from d2f_vllm.layers.sampler import Sampler
+from d2f_vllm.utils.context import set_context, get_context, reset_context
+from d2f_vllm.utils.loader import load_model
 
 
 class ModelRunner:
@@ -108,6 +108,7 @@ class ModelRunner:
         block_bytes = 2 * hf_config.num_hidden_layers * self.block_size * num_kv_heads * hf_config.head_dim * hf_config.torch_dtype.itemsize
         config.num_kvcache_blocks = int(total * config.gpu_memory_utilization - used - peak + current) // block_bytes
         assert config.num_kvcache_blocks > 0
+        # [kv_separated, layer_id, block_id, block_size(segmented seq_len), head, head_dim]
         self.kv_cache = torch.zeros(2, hf_config.num_hidden_layers, config.num_kvcache_blocks, self.block_size, num_kv_heads, hf_config.head_dim)
         layer_id = 0
         for module in self.model.modules():
