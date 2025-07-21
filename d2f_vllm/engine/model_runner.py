@@ -6,10 +6,9 @@ from multiprocessing.shared_memory import SharedMemory
 
 from d2f_vllm.config import Config
 from d2f_vllm.engine.sequence import Sequence
-from d2f_vllm.models.qwen3 import Qwen3ForCausalLM
+from d2f_vllm.models.auto_model import AutoModelLM
 from d2f_vllm.layers.sampler import Sampler
 from d2f_vllm.utils.context import set_context, get_context, reset_context
-from d2f_vllm.utils.loader import load_model
 
 
 class ModelRunner:
@@ -27,9 +26,11 @@ class ModelRunner:
         torch.cuda.set_device(rank)
         default_dtype = torch.get_default_dtype()
         torch.set_default_dtype(hf_config.torch_dtype)
-        torch.set_default_device("cuda")
-        self.model = Qwen3ForCausalLM(hf_config)
-        load_model(self.model, config.model)
+        # torch.set_default_device("cuda")
+        torch.set_default_device("cpu") # For debugging
+        self.model = AutoModelLM.from_pretrained(config)
+        # self.model = Qwen3ForCausalLM(hf_config)
+        # load_model(self.model, config.model)
         self.sampler = Sampler()
         self.warmup_model()
         self.allocate_kv_cache()

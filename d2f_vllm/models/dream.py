@@ -1,5 +1,5 @@
 import torch
-from torch import nn
+import torch.nn as nn
 import torch.distributed as dist
 
 from d2f_vllm.layers.activation import SiluAndMul
@@ -8,24 +8,25 @@ from d2f_vllm.layers.layernorm import RMSNorm
 from d2f_vllm.layers.linear import QKVParallelLinear, MergedColumnParallelLinear, RowParallelLinear
 from d2f_vllm.layers.rotary_embedding import get_rope
 from d2f_vllm.layers.embed_head import VocabParallelEmbedding, ParallelLMHead
-from d2f_vllm.models.config.dream import DreamConfig
+from d2f_vllm.models.config.dream.configuration_dream import DreamConfig
 
 
 class DreamRMSNorm(RMSNorm):
-    def __init__(self, hidden_size, eps = 0.000001):
+    def __init__(self, hidden_size, eps=1e-6):
         super().__init__(hidden_size, eps)
 
 
-class Qwen3Attention(nn.Module):
+class DreamAttention(nn.Module):
+    """Dream attention mechanism with q/k normalization."""
 
     def __init__(
         self,
         hidden_size: int,
         num_heads: int,
         num_kv_heads: int,
-        max_position: int = 4096 * 32,
+        max_position: int = 32768,
         head_dim: int | None = None,
-        rms_norm_eps: float = 1e-06,
+        rms_norm_eps: float = 1e-6,
         qkv_bias: bool = False,
         rope_theta: float = 10000,
         rope_scaling: tuple | None = None,
@@ -68,6 +69,7 @@ class Qwen3Attention(nn.Module):
             self.scaling,
             self.num_kv_heads,
         )
+        # Dream-specific q/k normalization
         self.q_norm = RMSNorm(self.head_dim, eps=rms_norm_eps)
         self.k_norm = RMSNorm(self.head_dim, eps=rms_norm_eps)
 
@@ -78,19 +80,24 @@ class Qwen3Attention(nn.Module):
     ) -> torch.Tensor:
         qkv = self.qkv_proj(hidden_states)
         q, k, v = qkv.split([self.q_size, self.kv_size, self.kv_size], dim=-1)
+        
+        # Apply q/k normalization
         q_by_head = q.view(-1, self.num_heads, self.head_dim)
         q_by_head = self.q_norm(q_by_head)
         q = q_by_head.view(q.shape)
+        
         k_by_head = k.view(-1, self.num_kv_heads, self.head_dim)
         k_by_head = self.k_norm(k_by_head)
         k = k_by_head.view(k.shape)
+        
         q, k = self.rotary_emb(positions, q, k)
         o = self.attn(q, k, v)
         output = self.o_proj(o)
         return output
 
 
-class Qwen3MLP(nn.Module):
+class DreamMLP(nn.Module):
+    """Dream MLP with SiLU activation."""
 
     def __init__(
         self,
@@ -120,23 +127,24 @@ class Qwen3MLP(nn.Module):
 
 
 class DreamDecoderLayer(nn.Module):
+    """Dream transformer decoder layer."""
     def __init__(
         self,
         config: DreamConfig,
     ) -> None:
         super().__init__()
-        self.self_attn = Qwen3Attention(
+        self.self_attn = DreamAttention(
             hidden_size=config.hidden_size,
             num_heads=config.num_attention_heads,
             num_kv_heads=config.num_key_value_heads,
             max_position=config.max_position_embeddings,
             rms_norm_eps=config.rms_norm_eps,
-            qkv_bias=getattr(config, 'attention_bias', False),
+            qkv_bias=getattr(config, 'attention_bias', True), # Default to True for Dream
             head_dim=getattr(config, 'head_dim', None),
-            rope_theta=getattr(config, "rope_theta", 1000000),
+            rope_theta=getattr(config, "rope_theta", 10000),
             rope_scaling=getattr(config, "rope_scaling", None),
         )
-        self.mlp = Qwen3MLP(
+        self.mlp = DreamMLP(
             hidden_size=config.hidden_size,
             intermediate_size=config.intermediate_size,
             hidden_act=config.hidden_act,
@@ -162,6 +170,7 @@ class DreamDecoderLayer(nn.Module):
 
 
 class DreamModel(nn.Module):
+    """Dream model for diffusion language modeling."""
 
     def __init__(
         self,
@@ -170,7 +179,7 @@ class DreamModel(nn.Module):
         super().__init__()
         self.embed_tokens = VocabParallelEmbedding(config.vocab_size, config.hidden_size)
         self.layers = nn.ModuleList([DreamDecoderLayer(config) for _ in range(config.num_hidden_layers)])
-        self.norm = DreamRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 
     def forward(
         self,
@@ -186,6 +195,7 @@ class DreamModel(nn.Module):
 
 
 class DreamForDLM(nn.Module):
+    """Dream model for diffusion language modeling with LM head."""
     packed_modules_mapping = {
         "q_proj": ("qkv_proj", "q"),
         "k_proj": ("qkv_proj", "k"),
@@ -193,7 +203,7 @@ class DreamForDLM(nn.Module):
         "gate_proj": ("gate_up_proj", 0),
         "up_proj": ("gate_up_proj", 1),
     }
-
+    
     def __init__(
         self,
         config: DreamConfig,
