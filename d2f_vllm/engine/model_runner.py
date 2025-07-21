@@ -27,7 +27,7 @@ class ModelRunner:
         default_dtype = torch.get_default_dtype()
         torch.set_default_dtype(hf_config.torch_dtype)
         # torch.set_default_device("cuda")
-        torch.set_default_device("cpu") # For debugging
+        torch.set_default_device("cuda") # For debugging
         self.model = AutoModelLM.from_pretrained(config)
         # self.model = Qwen3ForCausalLM(hf_config)
         # load_model(self.model, config.model)
@@ -36,7 +36,7 @@ class ModelRunner:
         self.allocate_kv_cache()
         if not self.enforce_eager:
             self.capture_cudagraph()
-        torch.set_default_device("cpu")
+        torch.set_default_device("cuda")
         torch.set_default_dtype(default_dtype)
 
         if self.world_size > 1:
@@ -106,11 +106,12 @@ class ModelRunner:
         peak = torch.cuda.memory_stats()["allocated_bytes.all.peak"]
         current = torch.cuda.memory_stats()["allocated_bytes.all.current"]
         num_kv_heads = hf_config.num_key_value_heads // self.world_size
-        block_bytes = 2 * hf_config.num_hidden_layers * self.block_size * num_kv_heads * hf_config.head_dim * hf_config.torch_dtype.itemsize
+        head_dim = hf_config.hidden_size // hf_config.num_attention_heads
+        block_bytes = 2 * hf_config.num_hidden_layers * self.block_size * num_kv_heads * head_dim * hf_config.torch_dtype.itemsize
         config.num_kvcache_blocks = int(total * config.gpu_memory_utilization - used - peak + current) // block_bytes
         assert config.num_kvcache_blocks > 0
         # [kv_separated, layer_id, block_id, block_size(segmented seq_len), head, head_dim]
-        self.kv_cache = torch.zeros(2, hf_config.num_hidden_layers, config.num_kvcache_blocks, self.block_size, num_kv_heads, hf_config.head_dim)
+        self.kv_cache = torch.zeros(2, hf_config.num_hidden_layers, config.num_kvcache_blocks, self.block_size, num_kv_heads, head_dim)
         layer_id = 0
         for module in self.model.modules():
             if hasattr(module, "k_cache") and hasattr(module, "v_cache"):
@@ -190,6 +191,7 @@ class ModelRunner:
     @torch.inference_mode()
     def run_model(self, input_ids: torch.Tensor, positions: torch.Tensor, is_prefill: bool):
         if is_prefill or self.enforce_eager or input_ids.size(0) > 512:
+            # print(input_ids.device,positions.device,self.model.device)
             return self.model.compute_logits(self.model(input_ids, positions))
         else:
             bs = input_ids.size(0)
