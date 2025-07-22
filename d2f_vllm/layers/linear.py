@@ -9,6 +9,54 @@ def divide(numerator, denominator):
     return numerator // denominator
 
 
+class LoRAMixin:
+    """Mixin class to add LoRA support to existing linear layers."""
+    
+    def __init_lora__(self, r: int = 0, lora_alpha: float = 1.0, lora_dropout: float = 0.0):
+        if r > 0:
+            self.r = r
+            self.lora_alpha = lora_alpha
+            self.scaling = lora_alpha / r
+            
+            # Initialize LoRA parameters
+            if hasattr(self, 'output_size_per_partition'):
+                out_features = self.output_size_per_partition
+            else:
+                out_features = self.output_size
+            
+            if hasattr(self, 'input_size_per_partition'):
+                in_features = self.input_size_per_partition
+            else:
+                in_features = self.input_size
+            
+            self.lora_A = nn.Parameter(torch.zeros(r, in_features))
+            self.lora_B = nn.Parameter(torch.zeros(out_features, r))
+            self.lora_dropout = nn.Dropout(lora_dropout) if lora_dropout > 0 else nn.Identity()
+            self.merged = False
+            
+            # Initialize weights
+            nn.init.kaiming_uniform_(self.lora_A, a=5**0.5)
+            nn.init.zeros_(self.lora_B)
+        else:
+            self.r = 0
+            self.merged = True
+    
+    def merge_lora(self):
+        """Merge LoRA weights into base weight."""
+        if hasattr(self, 'r') and self.r > 0 and not self.merged:
+            self.weight.data += self.scaling * torch.mm(self.lora_B, self.lora_A)
+            self.merged = True
+    
+    def lora_forward(self, x: torch.Tensor, base_output: torch.Tensor) -> torch.Tensor:
+        """Apply LoRA forward pass."""
+        if not hasattr(self, 'r') or self.r == 0 or self.merged:
+            return base_output
+        
+        lora_out = F.linear(self.lora_dropout(x), self.lora_A.T)
+        lora_out = F.linear(lora_out, self.lora_B.T)
+        return base_output + lora_out * self.scaling
+
+
 class LinearBase(nn.Module):
 
     def __init__(
@@ -52,15 +100,17 @@ class ReplicatedLinear(LinearBase):
         return F.linear(x, self.weight, self.bias)
 
 
-class ColumnParallelLinear(LinearBase):
+class ColumnParallelLinear(LinearBase, LoRAMixin):
 
     def __init__(
         self,
         input_size: int,
         output_size: int,
         bias: bool = False,
+        r: int = 0,
+        lora_alpha: float = 1.0,
     ):
-        super().__init__(input_size, output_size, 0)
+        LinearBase.__init__(self, input_size, output_size, 0)
         self.input_size_per_partition = input_size
         self.output_size_per_partition = divide(output_size, self.tp_size)
 
@@ -71,6 +121,8 @@ class ColumnParallelLinear(LinearBase):
             self.bias.weight_loader = self.weight_loader
         else:
             self.register_parameter("bias", None)
+        
+        self.__init_lora__(r, lora_alpha)
 
     def weight_loader(self, param: nn.Parameter, loaded_weight: torch.Tensor):
         param_data = param.data
@@ -80,7 +132,8 @@ class ColumnParallelLinear(LinearBase):
         param_data.copy_(loaded_weight)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return F.linear(x, self.weight, self.bias)
+        base_out = F.linear(x, self.weight, self.bias)
+        return self.lora_forward(x, base_out)
 
 
 class MergedColumnParallelLinear(ColumnParallelLinear):
@@ -140,15 +193,17 @@ class QKVParallelLinear(ColumnParallelLinear):
         param_data.copy_(loaded_weight)
 
 
-class RowParallelLinear(LinearBase):
+class RowParallelLinear(LinearBase, LoRAMixin):
 
     def __init__(
         self,
         input_size: int,
         output_size: int,
         bias: bool = False,
+        r: int = 0,
+        lora_alpha: float = 1.0,
     ):
-        super().__init__(input_size, output_size, 1)
+        LinearBase.__init__(self, input_size, output_size, 1)
         self.input_size_per_partition = divide(input_size, self.tp_size)
         self.output_size_per_partition = output_size
 
@@ -159,6 +214,8 @@ class RowParallelLinear(LinearBase):
             self.bias.weight_loader = self.weight_loader
         else:
             self.register_parameter("bias", None)
+        
+        self.__init_lora__(r, lora_alpha)
 
     def weight_loader(self, param: nn.Parameter, loaded_weight: torch.Tensor):
         param_data = param.data
@@ -171,4 +228,4 @@ class RowParallelLinear(LinearBase):
         y = F.linear(x, self.weight, self.bias if self.tp_rank == 0 else None)
         if self.tp_size > 1:
             dist.all_reduce(y)
-        return y
+        return self.lora_forward(x, y)

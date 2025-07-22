@@ -1,20 +1,24 @@
 import pickle
 import torch
 import torch.distributed as dist
+
+from typing import List
+from abc import ABC, abstractmethod
 from multiprocessing.synchronize import Event
 from multiprocessing.shared_memory import SharedMemory
 
 from d2f_vllm.config import Config
-from d2f_vllm.engine.sequence import Sequence
+from d2f_vllm.engine.sequence import SequenceForCausalLM, SequenceForDiffusionLM, SequenceBase
 from d2f_vllm.models.auto_model import AutoModelLM
 from d2f_vllm.layers.sampler import Sampler
 from d2f_vllm.utils.context import set_context, get_context, reset_context
 
 
-class ModelRunner:
-
-    def __init__(self, config: Config, rank: int, event: Event | list[Event]):
+class ModelRunnerBase(ABC):
+    """Base class for model runners supporting different model types."""
+    def __init__(self, config: Config, rank: int, event: Event | List[Event]):
         self.config = config
+        self.model_type = config.model_type
         hf_config = config.hf_config
         self.block_size = config.kvcache_block_size
         self.enforce_eager = config.enforce_eager
@@ -22,30 +26,30 @@ class ModelRunner:
         self.rank = rank
         self.event = event
 
+        # Initialize model, sampler, and kv cache
         dist.init_process_group("nccl", "tcp://localhost:2333", world_size=self.world_size, rank=rank)
         torch.cuda.set_device(rank)
         default_dtype = torch.get_default_dtype()
         torch.set_default_dtype(hf_config.torch_dtype)
-        # torch.set_default_device("cuda")
-        torch.set_default_device("cpu") # For debugging
+        torch.set_default_device("cuda")
         self.model = AutoModelLM.from_pretrained(config)
-        # self.model = Qwen3ForCausalLM(hf_config)
-        # load_model(self.model, config.model)
         self.sampler = Sampler()
         self.warmup_model()
-        self.allocate_kv_cache()
+        self.allocate_kv_cache() # NOCHANGE
         if not self.enforce_eager:
             self.capture_cudagraph()
+        
+        # Allocate shared memory for inter-process communication
+        # NOCHANGE
         torch.set_default_device("cpu")
         torch.set_default_dtype(default_dtype)
-
         if self.world_size > 1:
             if rank == 0:
-                self.shm = SharedMemory(name="nanovllm", create=True, size=2**20)
+                self.shm = SharedMemory(name="d2f_vllm", create=True, size=2**20)
                 dist.barrier()
             else:
                 dist.barrier()
-                self.shm = SharedMemory(name="nanovllm")
+                self.shm = SharedMemory(name="d2f_vllm")
                 self.loop()
 
     def exit(self):
@@ -89,14 +93,10 @@ class ModelRunner:
         method = getattr(self, method_name, None)
         return method(*args)
 
+    @abstractmethod
     def warmup_model(self):
-        torch.cuda.empty_cache()
-        torch.cuda.reset_peak_memory_stats()
-        max_num_batched_tokens, max_model_len = self.config.max_num_batched_tokens, self.config.max_model_len
-        num_seqs = min(max_num_batched_tokens // max_model_len, self.config.max_num_seqs)
-        seqs = [Sequence([0] * max_model_len) for _ in range(num_seqs)]
-        self.run(seqs, True)
-        torch.cuda.empty_cache()
+        """Model-specific warmup logic."""
+        pass
 
     def allocate_kv_cache(self):
         config = self.config
@@ -118,13 +118,60 @@ class ModelRunner:
                 module.v_cache = self.kv_cache[1, layer_id]
                 layer_id += 1
 
-    def prepare_block_tables(self, seqs: list[Sequence]):
+    def prepare_block_tables(self, seqs: List[SequenceBase]):
         max_len = max(len(seq.block_table) for seq in seqs)
         block_tables = [seq.block_table + [-1] * (max_len - len(seq.block_table)) for seq in seqs]
         block_tables = torch.tensor(block_tables, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
         return block_tables
 
-    def prepare_prefill(self, seqs: list[Sequence]):
+    @abstractmethod
+    def prepare_prefill(self, seqs: List[SequenceBase]):
+        """Model-specific prefill preparation."""
+        pass
+
+    @abstractmethod
+    def prepare_decode(self, seqs: List[SequenceBase]):
+        """Model-specific decode preparation."""
+        pass
+
+    def prepare_sample(self, seqs: List[SequenceBase]):
+        temperatures = []
+        for seq in seqs:
+            temperatures.append(seq.temperature)
+        temperatures = torch.tensor(temperatures, dtype=torch.float32, pin_memory=True).cuda(non_blocking=True)
+        return temperatures
+
+    @abstractmethod
+    @torch.inference_mode()
+    def run_model(self, input_ids: torch.Tensor, positions: torch.Tensor, is_prefill: bool):
+        """Model-specific forward pass."""
+        pass
+
+    @abstractmethod
+    def run(self, seqs: List[SequenceBase], is_prefill: bool) -> List[int]:
+        """Main inference pipeline."""
+        pass
+
+    @abstractmethod
+    @torch.inference_mode()
+    def capture_cudagraph(self):
+        """Model-specific CUDA graph capture."""
+        pass
+
+
+class ModelRunnerForCausalLM(ModelRunnerBase):
+    """Model runner for Causal Language Models."""
+    def warmup_model(self):
+        torch.cuda.empty_cache()
+        torch.cuda.reset_peak_memory_stats()
+        max_num_batched_tokens, max_model_len = self.config.max_num_batched_tokens, self.config.max_model_len
+        num_seqs = min(max_num_batched_tokens // max_model_len, self.config.max_num_seqs)
+        test_input_ids = [0] * max_model_len
+        seqs = [SequenceForCausalLM(test_input_ids) for _ in range(num_seqs)]
+        self.run(seqs, True)
+        torch.cuda.empty_cache()
+
+    def prepare_prefill(self, seqs: List[SequenceBase]):
         input_ids = []
         positions = []
         cu_seqlens_q = [0]
@@ -162,7 +209,7 @@ class ModelRunner:
         set_context(True, cu_seqlens_q, cu_seqlens_k, max_seqlen_q, max_seqlen_k, slot_mapping, None, block_tables)
         return input_ids, positions
 
-    def prepare_decode(self, seqs: list[Sequence]):
+    def prepare_decode(self, seqs: List[SequenceBase]):
         input_ids = []
         positions = []
         slot_mapping = []
@@ -179,13 +226,6 @@ class ModelRunner:
         block_tables = self.prepare_block_tables(seqs)
         set_context(False, slot_mapping=slot_mapping, context_lens=context_lens, block_tables=block_tables)
         return input_ids, positions
-
-    def prepare_sample(self, seqs: list[Sequence]):
-        temperatures = []
-        for seq in seqs:
-            temperatures.append(seq.temperature)
-        temperatures = torch.tensor(temperatures, dtype=torch.float32, pin_memory=True).cuda(non_blocking=True)
-        return temperatures
 
     @torch.inference_mode()
     def run_model(self, input_ids: torch.Tensor, positions: torch.Tensor, is_prefill: bool):
@@ -207,8 +247,9 @@ class ModelRunner:
             graph.replay()
             return self.model.compute_logits(graph_vars["outputs"][:bs])
 
-    def run(self, seqs: list[Sequence], is_prefill: bool) -> list[int]:
-        input_ids, positions = self.prepare_prefill(seqs) if is_prefill else self.prepare_decode(seqs)
+    def run(self, seqs: List[SequenceBase], is_prefill: bool) -> List[int]:
+        input_ids, positions = self.prepare_prefill(seqs) if is_prefill \
+            else self.prepare_decode(seqs)
         temperatures = self.prepare_sample(seqs) if self.rank == 0 else None
         logits = self.run_model(input_ids, positions, is_prefill)
         token_ids = self.sampler(logits, temperatures).tolist() if self.rank == 0 else None
@@ -251,3 +292,44 @@ class ModelRunner:
             block_tables=block_tables,
             outputs=outputs,
         )
+
+
+class ModelRunnerForDiffusionLM(ModelRunnerBase):
+    """Model runner for Diffusion Language Models. TODO: Implement DLM-specific logic."""
+    def warmup_model(self):
+        # TODO: Implement DLM-specific warmup
+        pass
+
+    def prepare_prefill(self, seqs: List[SequenceBase]):
+        # TODO: Implement DLM-specific prefill preparation
+        pass
+
+    def prepare_decode(self, seqs: List[SequenceBase]):
+        # TODO: Implement DLM-specific decode preparation
+        pass
+
+    @torch.inference_mode()
+    def run_model(self, input_ids: torch.Tensor, positions: torch.Tensor, is_prefill: bool):
+        # TODO: Implement DLM-specific model forward pass
+        pass
+
+    def run(self, seqs: List[SequenceBase], is_prefill: bool) -> List[int]:
+        # TODO: Implement DLM-specific inference pipeline
+        pass
+
+    @torch.inference_mode()
+    def capture_cudagraph(self):
+        # TODO: Implement DLM-specific CUDA graph capture
+        pass
+    
+
+class AutoModelRunner:
+    @classmethod
+    def from_config(cls, config: Config, rank: int, event: Event | List[Event]):
+        """Factory method to create a model runner based on the model type."""
+        if config.model_type == "causal_lm":
+            return ModelRunnerForCausalLM(config, rank, event)
+        elif config.model_type == "diffusion_lm":
+            return ModelRunnerForDiffusionLM(config, rank, event)
+        else:
+            raise ValueError(f"Unsupported model type: {config.model_type}")

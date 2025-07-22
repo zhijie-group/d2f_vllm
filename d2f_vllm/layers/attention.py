@@ -29,24 +29,29 @@ def store_kvcache_kernel(
     tl.store(v_cache_ptr + cache_offsets, value)
 
 
-def store_kvcache(key: torch.Tensor, value: torch.Tensor, k_cache: torch.Tensor, v_cache: torch.Tensor, slot_mapping: torch.Tensor):
+def store_kvcache(key: torch.Tensor, value: torch.Tensor, 
+                  k_cache: torch.Tensor, v_cache: torch.Tensor, 
+                  slot_mapping: torch.Tensor):
     N, num_heads, head_dim = key.shape
     D = num_heads * head_dim
     assert key.stride(-1) == 1 and value.stride(-1) == 1
     assert key.stride(1) == head_dim and value.stride(1) == head_dim
     assert k_cache.stride(1) == D and v_cache.stride(1) == D
     assert slot_mapping.numel() == N
-    store_kvcache_kernel[(N,)](key, key.stride(0), value, value.stride(0), k_cache, v_cache, slot_mapping, D)
+    store_kvcache_kernel[(N,)](
+        key, key.stride(0),
+        value, value.stride(0),
+        k_cache, v_cache, slot_mapping, D)
 
 
 class Attention(nn.Module):
-
     def __init__(
         self,
         num_heads,
         head_dim,
         scale,
         num_kv_heads,
+        causal=True,
     ):
         super().__init__()
         self.num_heads = num_heads
@@ -54,6 +59,7 @@ class Attention(nn.Module):
         self.scale = scale
         self.num_kv_heads = num_kv_heads
         self.k_cache = self.v_cache = torch.tensor([])
+        self.causal = causal
 
     def forward(self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor):
         o: torch.Tensor
@@ -68,12 +74,16 @@ class Attention(nn.Module):
             if context.block_tables is not None:    # prefix cache
                 k, v = k_cache, v_cache
             o = flash_attn_varlen_func(q, k, v,
-                                       max_seqlen_q=context.max_seqlen_q, cu_seqlens_q=context.cu_seqlens_q,
-                                       max_seqlen_k=context.max_seqlen_k, cu_seqlens_k=context.cu_seqlens_k,
-                                       softmax_scale=self.scale, causal=True, block_table=context.block_tables)
+                                       max_seqlen_q=context.max_seqlen_q, 
+                                       cu_seqlens_q=context.cu_seqlens_q,
+                                       max_seqlen_k=context.max_seqlen_k, 
+                                       cu_seqlens_k=context.cu_seqlens_k,
+                                       softmax_scale=self.scale, causal=self.causal, 
+                                       block_table=context.block_tables)
         else:   # decode
             o = flash_attn_with_kvcache(q.unsqueeze(1), k_cache, v_cache,
-                                        cache_seqlens=context.context_lens, block_table=context.block_tables, 
-                                        softmax_scale=self.scale, causal=True)
+                                        cache_seqlens=context.context_lens, 
+                                        block_table=context.block_tables, 
+                                        softmax_scale=self.scale, causal=self.causal)
         o = o.view(-1, self.num_heads * self.head_dim)
         return o

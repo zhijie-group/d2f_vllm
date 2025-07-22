@@ -5,7 +5,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import List, Dict, Deque, Set
 
-from d2f_vllm.engine.sequence import Sequence
+from d2f_vllm.engine.sequence import SequenceBase
 
 
 @dataclass
@@ -50,15 +50,15 @@ class BlockManager:
         self.used_block_ids.add(block_id)
         return self.blocks[block_id]
 
-    def _deallocate_block(self, block_id: int) -> Block:
+    def _free_block(self, block_id: int) -> Block:
         assert self.blocks[block_id].ref_count == 0
         self.used_block_ids.remove(block_id)
         self.free_block_ids.append(block_id)
 
-    def can_allocate(self, seq: Sequence) -> bool:
+    def can_allocate(self, seq: SequenceBase) -> bool:
         return len(self.free_block_ids) >= seq.num_blocks
 
-    def allocate(self, seq: Sequence):
+    def allocate(self, seq: SequenceBase):
         assert not seq.block_table
         h = -1
         cache_miss = False
@@ -83,19 +83,19 @@ class BlockManager:
                 self.hash_to_block_id[h] = block_id
             seq.block_table.append(block_id)
 
-    def deallocate(self, seq: Sequence):
+    def free(self, seq: SequenceBase):
         for block_id in reversed(seq.block_table):
             block = self.blocks[block_id]
             block.ref_count -= 1
             if block.ref_count == 0:
-                self._deallocate_block(block_id)
+                self._free_block(block_id)
         seq.num_cached_tokens = 0
         seq.block_table.clear()
 
-    def can_append(self, seq: Sequence) -> bool:
+    def can_append(self, seq: SequenceBase) -> bool:
         return len(self.free_block_ids) >= (len(seq) % self.block_size == 1)
 
-    def may_append(self, seq: Sequence):
+    def may_append(self, seq: SequenceBase):
         block_table = seq.block_table
         last_block = self.blocks[block_table[-1]]
         if len(seq) % self.block_size == 1:

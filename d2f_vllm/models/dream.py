@@ -5,7 +5,7 @@ import torch.distributed as dist
 from d2f_vllm.layers.activation import SiluAndMul
 from d2f_vllm.layers.attention import Attention
 from d2f_vllm.layers.layernorm import RMSNorm
-from d2f_vllm.layers.linear import QKVParallelLinear, MergedColumnParallelLinear, RowParallelLinear
+from d2f_vllm.layers.linear import RowParallelLinear, ColumnParallelLinear
 from d2f_vllm.layers.rotary_embedding import get_rope
 from d2f_vllm.layers.embed_head import VocabParallelEmbedding, ParallelLMHead
 from d2f_vllm.models.config.dream.configuration_dream import DreamConfig
@@ -17,8 +17,7 @@ class DreamRMSNorm(RMSNorm):
 
 
 class DreamAttention(nn.Module):
-    """Dream attention mechanism with q/k normalization."""
-
+    """Dream attention mechanism."""
     def __init__(
         self,
         hidden_size: int,
@@ -27,7 +26,7 @@ class DreamAttention(nn.Module):
         max_position: int = 32768,
         head_dim: int | None = None,
         rms_norm_eps: float = 1e-6,
-        qkv_bias: bool = False,
+        qkv_bias: bool = True,
         rope_theta: float = 10000,
         rope_scaling: tuple | None = None,
     ) -> None:
@@ -44,11 +43,19 @@ class DreamAttention(nn.Module):
         self.kv_size = self.num_kv_heads * self.head_dim
         self.scaling = self.head_dim**-0.5
 
-        self.qkv_proj = QKVParallelLinear(
+        self.q_proj = ColumnParallelLinear(
             hidden_size,
-            self.head_dim,
-            self.total_num_heads,
-            self.total_num_kv_heads,
+            self.total_num_heads * self.head_dim,
+            bias=qkv_bias,
+        )
+        self.k_proj = ColumnParallelLinear(
+            hidden_size,
+            self.total_num_kv_heads * self.head_dim,
+            bias=qkv_bias,
+        )
+        self.v_proj = ColumnParallelLinear(
+            hidden_size,
+            self.total_num_kv_heads * self.head_dim,
             bias=qkv_bias,
         )
         self.o_proj = RowParallelLinear(
@@ -68,27 +75,17 @@ class DreamAttention(nn.Module):
             self.head_dim,
             self.scaling,
             self.num_kv_heads,
+            False,  # Dream uses full attention
         )
-        # Dream-specific q/k normalization
-        self.q_norm = RMSNorm(self.head_dim, eps=rms_norm_eps)
-        self.k_norm = RMSNorm(self.head_dim, eps=rms_norm_eps)
 
     def forward(
         self,
         positions: torch.Tensor,
         hidden_states: torch.Tensor,
     ) -> torch.Tensor:
-        qkv = self.qkv_proj(hidden_states)
-        q, k, v = qkv.split([self.q_size, self.kv_size, self.kv_size], dim=-1)
-        
-        # Apply q/k normalization
-        q_by_head = q.view(-1, self.num_heads, self.head_dim)
-        q_by_head = self.q_norm(q_by_head)
-        q = q_by_head.view(q.shape)
-        
-        k_by_head = k.view(-1, self.num_kv_heads, self.head_dim)
-        k_by_head = self.k_norm(k_by_head)
-        k = k_by_head.view(k.shape)
+        q = self.q_proj(hidden_states)
+        k = self.k_proj(hidden_states)
+        v = self.v_proj(hidden_states)
         
         q, k = self.rotary_emb(positions, q, k)
         o = self.attn(q, k, v)
@@ -98,7 +95,6 @@ class DreamAttention(nn.Module):
 
 class DreamMLP(nn.Module):
     """Dream MLP with SiLU activation."""
-
     def __init__(
         self,
         hidden_size: int,
@@ -106,9 +102,14 @@ class DreamMLP(nn.Module):
         hidden_act: str,
     ) -> None:
         super().__init__()
-        self.gate_up_proj = MergedColumnParallelLinear(
+        self.gate_proj = ColumnParallelLinear(
             hidden_size,
-            [intermediate_size] * 2,
+            intermediate_size,
+            bias=False,
+        )
+        self.up_proj = ColumnParallelLinear(
+            hidden_size,
+            intermediate_size,
             bias=False,
         )
         self.down_proj = RowParallelLinear(
@@ -120,8 +121,9 @@ class DreamMLP(nn.Module):
         self.act_fn = SiluAndMul()
 
     def forward(self, x):
-        gate_up = self.gate_up_proj(x)
-        x = self.act_fn(gate_up)
+        gate = self.gate_proj(x)
+        up = self.up_proj(x)
+        x = self.act_fn(torch.cat([gate, up], dim=-1))
         x = self.down_proj(x)
         return x
 
@@ -139,7 +141,7 @@ class DreamDecoderLayer(nn.Module):
             num_kv_heads=config.num_key_value_heads,
             max_position=config.max_position_embeddings,
             rms_norm_eps=config.rms_norm_eps,
-            qkv_bias=getattr(config, 'attention_bias', True), # Default to True for Dream
+            qkv_bias=True,  # Dream uses bias in attention
             head_dim=getattr(config, 'head_dim', None),
             rope_theta=getattr(config, "rope_theta", 10000),
             rope_scaling=getattr(config, "rope_scaling", None),
@@ -149,8 +151,8 @@ class DreamDecoderLayer(nn.Module):
             intermediate_size=config.intermediate_size,
             hidden_act=config.hidden_act,
         )
-        self.input_layernorm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        self.post_attention_layernorm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.input_layernorm = DreamRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.post_attention_layernorm = DreamRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 
     def forward(
         self,
@@ -171,15 +173,15 @@ class DreamDecoderLayer(nn.Module):
 
 class DreamModel(nn.Module):
     """Dream model for diffusion language modeling."""
-
     def __init__(
         self,
         config: DreamConfig,
     ) -> None:
         super().__init__()
         self.embed_tokens = VocabParallelEmbedding(config.vocab_size, config.hidden_size)
-        self.layers = nn.ModuleList([DreamDecoderLayer(config) for _ in range(config.num_hidden_layers)])
-        self.norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.layers = nn.ModuleList([DreamDecoderLayer(config) 
+                                     for _ in range(config.num_hidden_layers)])
+        self.norm = DreamRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 
     def forward(
         self,
@@ -194,15 +196,9 @@ class DreamModel(nn.Module):
         return hidden_states
 
 
-class DreamForDLM(nn.Module):
+class DreamForDiffusionLM(nn.Module):
     """Dream model for diffusion language modeling with LM head."""
-    packed_modules_mapping = {
-        "q_proj": ("qkv_proj", "q"),
-        "k_proj": ("qkv_proj", "k"),
-        "v_proj": ("qkv_proj", "v"),
-        "gate_proj": ("gate_up_proj", 0),
-        "up_proj": ("gate_up_proj", 1),
-    }
+    packed_modules_mapping = {}
     
     def __init__(
         self,
@@ -211,7 +207,7 @@ class DreamForDLM(nn.Module):
         super().__init__()
         self.model = DreamModel(config)
         self.lm_head = ParallelLMHead(config.vocab_size, config.hidden_size)
-        if config.tie_word_embeddings:
+        if getattr(config, 'tie_word_embeddings', False):
             self.lm_head.weight.data = self.model.embed_tokens.weight.data
 
     def forward(

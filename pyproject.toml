@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "accelerate>=1.9.0",
+    "bpytop>=1.0.68",
     "datasets>=4.0.0",
     "flash-attn>=2.8.1",
     "lm-eval>=0.4.9",

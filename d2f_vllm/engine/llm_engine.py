@@ -6,33 +6,34 @@ from dataclasses import fields
 from time import perf_counter
 from tqdm.auto import tqdm
 from transformers import AutoTokenizer
+from typing import List
 
 from d2f_vllm.config import Config
 from d2f_vllm.sampling_params import SamplingParams
-from d2f_vllm.engine.sequence import Sequence
-from d2f_vllm.engine.scheduler import Scheduler
-from d2f_vllm.engine.model_runner import ModelRunner
+from d2f_vllm.engine.sequence import SequenceForCausalLM, SequenceForDiffusionLM
+from d2f_vllm.engine.scheduler import AutoScheduler
+from d2f_vllm.engine.model_runner import AutoModelRunner
 
 
 class LLMEngine:
-
     def __init__(self, model, **kwargs):
         config_fields = {field.name for field in fields(Config)}
         config_kwargs = {k: v for k, v in kwargs.items() if k in config_fields}
         config = Config(model, **config_kwargs)
+        self.engine_type = config.model_type
         self.ps = []
         self.events = []
         ctx = mp.get_context("spawn")
         for i in range(1, config.tensor_parallel_size):
             event = ctx.Event()
-            process = ctx.Process(target=ModelRunner, args=(config, i, event))
+            process = ctx.Process(target=AutoModelRunner.from_config, args=(config, i, event))
             process.start()
             self.ps.append(process)
             self.events.append(event)
-        self.model_runner = ModelRunner(config, 0, self.events)
+        self.model_runner = AutoModelRunner.from_config(config, 0, self.events)
         self.tokenizer = AutoTokenizer.from_pretrained(config.model, use_fast=True)
         config.eos = self.tokenizer.eos_token_id
-        self.scheduler = Scheduler(config)
+        self.scheduler = AutoScheduler.from_config(config) # NOTE: Probably need to implement SchedulerForDiffusionLM
         atexit.register(self.exit)
 
     def exit(self):
@@ -41,9 +42,10 @@ class LLMEngine:
         for p in self.ps:
             p.join()
 
-    def add_request(self, prompt: str | list[int], sampling_params: SamplingParams):
+    def add_request(self, prompt: str | List[int], sampling_params: SamplingParams):
         if isinstance(prompt, str):
             prompt = self.tokenizer.encode(prompt)
+        Sequence = SequenceForCausalLM if self.engine_type == "causal_lm" else SequenceForDiffusionLM
         seq = Sequence(prompt, sampling_params)
         self.scheduler.add(seq)
 
@@ -60,10 +62,10 @@ class LLMEngine:
 
     def generate(
         self,
-        prompts: list[str] | list[list[int]],
-        sampling_params: SamplingParams | list[SamplingParams],
+        prompts: List[str] | List[List[int]],
+        sampling_params: SamplingParams | List[SamplingParams],
         use_tqdm: bool = True,
-    ) -> list[str]:
+    ) -> List[str]:
         if use_tqdm:
             pbar = tqdm(total=len(prompts), desc="Generating", dynamic_ncols=True)
         if not isinstance(sampling_params, list):
