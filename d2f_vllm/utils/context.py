@@ -1,9 +1,12 @@
-from dataclasses import dataclass
 import torch
 
+from typing import List
+from dataclasses import dataclass
+
+from d2f_vllm.engine.sequence import SequenceForDiffusionLM
 
 @dataclass
-class Context:
+class ContextBase:
     is_prefill: bool = False
     cu_seqlens_q: torch.Tensor | None = None
     cu_seqlens_k: torch.Tensor | None = None
@@ -13,15 +16,83 @@ class Context:
     context_lens: torch.Tensor | None = None
     block_tables: torch.Tensor | None = None
 
-_CONTEXT = Context()
+# Global context for causal language model
+@dataclass
+class ContextForCausalLM(ContextBase):
+    pass
 
-def get_context():
-    return _CONTEXT
+_CONTEXT_FOR_CAUSAL_LM = ContextForCausalLM()
 
-def set_context(is_prefill, cu_seqlens_q=None, cu_seqlens_k=None, max_seqlen_q=0, max_seqlen_k=0, slot_mapping=None, context_lens=None, block_tables=None):
-    global _CONTEXT
-    _CONTEXT = Context(is_prefill, cu_seqlens_q, cu_seqlens_k, max_seqlen_q, max_seqlen_k, slot_mapping, context_lens, block_tables)
+def get_context_causal_lm() -> ContextForCausalLM:
+    return _CONTEXT_FOR_CAUSAL_LM
 
-def reset_context():
-    global _CONTEXT
-    _CONTEXT = Context()
+def set_context_causal_lm(
+    is_prefill,
+    cu_seqlens_q=None, cu_seqlens_k=None,
+    max_seqlen_q=0, max_seqlen_k=0,
+    slot_mapping=None, context_lens=None, block_tables=None
+) -> None:
+    global _CONTEXT_FOR_CAUSAL_LM
+    _CONTEXT_FOR_CAUSAL_LM = ContextForCausalLM(
+        is_prefill, 
+        cu_seqlens_q, cu_seqlens_k,
+        max_seqlen_q, max_seqlen_k, 
+        slot_mapping, context_lens, block_tables
+    )
+
+def reset_context_causal_lm() -> None:
+    global _CONTEXT_FOR_CAUSAL_LM
+    _CONTEXT_FOR_CAUSAL_LM = ContextForCausalLM()
+
+
+# Global context for diffusion language model
+@dataclass
+class ContextForDiffusionLM(ContextBase):
+    seqs: List[SequenceForDiffusionLM] = None
+    block_mask: torch.Tensor | None = None
+    
+    def __post_init__(self):
+        if self.seqs is not None and len(self.seqs) > 0:
+            masks = [seq.current_block_mask for seq in self.seqs]
+            
+            total_len = sum(mask.size(-1) for mask in masks)
+            self.block_mask = torch.zeros(total_len, total_len, dtype=torch.bool)
+            
+            start_idx = 0
+            for mask in masks:
+                seq_len = mask.size(-1)
+                end_idx = start_idx + seq_len
+                self.block_mask[start_idx:end_idx, start_idx:end_idx] = mask
+                start_idx = end_idx
+            self.block_mask = self.block_mask.to(mask.device)
+        else:
+            self.block_mask = None
+        
+    @property
+    def total_num_seqs(self) -> int:
+        return len(self.seqs) if self.seqs is not None else 0
+
+_CONTEXT_FOR_DIFFUSION_LM = ContextForDiffusionLM()
+
+def get_context_diffusion_lm() -> ContextForDiffusionLM:
+    return _CONTEXT_FOR_DIFFUSION_LM
+
+def set_context_diffusion_lm(
+    is_prefill,
+    cu_seqlens_q=None, cu_seqlens_k=None,
+    max_seqlen_q=0, max_seqlen_k=0,
+    slot_mapping=None, context_lens=None, block_tables=None,
+    seqs= None
+) -> None:
+    global _CONTEXT_FOR_DIFFUSION_LM
+    _CONTEXT_FOR_DIFFUSION_LM = ContextForDiffusionLM(
+        is_prefill,
+        cu_seqlens_q, cu_seqlens_k,
+        max_seqlen_q, max_seqlen_k,
+        slot_mapping, context_lens, block_tables,
+        seqs
+    )
+
+def reset_context_diffusion_lm() -> None:
+    global _CONTEXT_FOR_DIFFUSION_LM
+    _CONTEXT_FOR_DIFFUSION_LM = ContextForDiffusionLM()

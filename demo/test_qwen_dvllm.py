@@ -7,6 +7,10 @@ llm = LLM(
     model_type="causal_lm"
 )
 sampling_params = SamplingParams(temperature=0.6, max_tokens=256)
-prompts = ["Hello, Nano-vLLM."]
+prompts = prompts = [
+    "Hello, Nano-vLLM.", 
+    "What is the meaning of life in your opinion?", 
+    "Tell me a joke about AI. Say it in a funny way."
+]
 outputs = llm.generate(prompts, sampling_params)
 outputs[0]["text"]

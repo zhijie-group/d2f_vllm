@@ -75,20 +75,21 @@ class DreamAttention(nn.Module):
             self.head_dim,
             self.scaling,
             self.num_kv_heads,
-            False,  # Dream uses full attention
+            "diffusion_lm",  # Dream uses full attention
         )
 
     def forward(
         self,
         positions: torch.Tensor,
         hidden_states: torch.Tensor,
+        mask: torch.Tensor | None = None
     ) -> torch.Tensor:
         q = self.q_proj(hidden_states)
         k = self.k_proj(hidden_states)
         v = self.v_proj(hidden_states)
         
         q, k = self.rotary_emb(positions, q, k)
-        o = self.attn(q, k, v)
+        o = self.attn(q, k, v, mask)
         output = self.o_proj(o)
         return output
 
@@ -159,13 +160,14 @@ class DreamDecoderLayer(nn.Module):
         positions: torch.Tensor,
         hidden_states: torch.Tensor,
         residual: torch.Tensor | None,
+        mask: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         if residual is None:
             residual = hidden_states
             hidden_states = self.input_layernorm(hidden_states)
         else:
             hidden_states, residual = self.input_layernorm(hidden_states, residual)
-        hidden_states = self.self_attn(positions, hidden_states)
+        hidden_states = self.self_attn(positions, hidden_states, mask)
         hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
         hidden_states = self.mlp(hidden_states)
         return hidden_states, residual
@@ -187,11 +189,12 @@ class DreamModel(nn.Module):
         self,
         input_ids: torch.Tensor,
         positions: torch.Tensor,
+        mask: torch.Tensor | None = None
     ) -> torch.Tensor:
         hidden_states = self.embed_tokens(input_ids)
         residual = None
         for layer in self.layers:
-            hidden_states, residual = layer(positions, hidden_states, residual)
+            hidden_states, residual = layer(positions, hidden_states, residual, mask)
         hidden_states, _ = self.norm(hidden_states, residual)
         return hidden_states
 
@@ -214,8 +217,9 @@ class DreamForDiffusionLM(nn.Module):
         self,
         input_ids: torch.Tensor,
         positions: torch.Tensor,
+        mask: torch.Tensor | None = None
     ) -> torch.Tensor:
-        hidden_states = self.model(input_ids, positions)
+        hidden_states = self.model(input_ids, positions, mask)
         return hidden_states
 
     def compute_logits(

@@ -11,7 +11,7 @@ from typing import List
 from d2f_vllm.config import Config
 from d2f_vllm.sampling_params import SamplingParams
 from d2f_vllm.engine.sequence import SequenceForCausalLM, SequenceForDiffusionLM
-from d2f_vllm.engine.scheduler import AutoScheduler
+from d2f_vllm.engine.scheduler import AutoScheduler, SchedulerBase
 from d2f_vllm.engine.model_runner import AutoModelRunner
 
 
@@ -19,7 +19,7 @@ class LLMEngine:
     def __init__(self, model, **kwargs):
         config_fields = {field.name for field in fields(Config)}
         config_kwargs = {k: v for k, v in kwargs.items() if k in config_fields}
-        config = Config(model, **config_kwargs)
+        self.config = config = Config(model, **config_kwargs)
         self.engine_type = config.model_type
         self.ps = []
         self.events = []
@@ -31,9 +31,9 @@ class LLMEngine:
             self.ps.append(process)
             self.events.append(event)
         self.model_runner = AutoModelRunner.from_config(config, 0, self.events)
-        self.tokenizer = AutoTokenizer.from_pretrained(config.model, use_fast=True)
+        self.tokenizer = AutoTokenizer.from_pretrained(config.model, use_fast=True, trust_remote_code=True)
         config.eos = self.tokenizer.eos_token_id
-        self.scheduler = AutoScheduler.from_config(config) # NOTE: Probably need to implement SchedulerForDiffusionLM
+        self.scheduler: SchedulerBase = AutoScheduler.from_config(config) # NOTE: Probably need to implement SchedulerForDiffusionLM
         atexit.register(self.exit)
 
     def exit(self):
@@ -45,8 +45,14 @@ class LLMEngine:
     def add_request(self, prompt: str | List[int], sampling_params: SamplingParams):
         if isinstance(prompt, str):
             prompt = self.tokenizer.encode(prompt)
-        Sequence = SequenceForCausalLM if self.engine_type == "causal_lm" else SequenceForDiffusionLM
-        seq = Sequence(prompt, sampling_params)
+            
+        if self.engine_type == "causal_lm":
+            seq = SequenceForCausalLM(prompt, sampling_params)
+        elif self.engine_type == "diffusion_lm":
+            seq = SequenceForDiffusionLM(prompt, sampling_params, config=self.config)
+        else:
+            raise ValueError(f"Unsupported engine type: {self.engine_type}")
+        
         self.scheduler.add(seq)
 
     def step(self):

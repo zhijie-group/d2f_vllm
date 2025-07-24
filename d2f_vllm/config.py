@@ -9,11 +9,13 @@ class Config:
     lora_path: str = ""
     model_name: str = "dream"
     model_type: str = "diffusion_lm" # "causal_lm" or "diffusion_lm"
+    mask_token_id: int = 151666
     diffusion_block_size: int = 32
+    to_cache_threshold: float = 0.9
     use_lora: bool = False
     max_num_batched_tokens: int = 16384
     max_num_seqs: int = 512
-    max_model_len: int = 4096
+    max_model_len: int = 8192
     gpu_memory_utilization: float = 0.9
     tensor_parallel_size: int = 1
     enforce_eager: bool = False

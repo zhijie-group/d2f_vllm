@@ -103,6 +103,7 @@ class SchedulerForCausalLM(SchedulerBase):
 class SchedulerForDiffusionLM(SchedulerBase):
     def __init__(self, config: Config):
         super().__init__(config)
+        self.diffusion_block_size = config.diffusion_block_size
 
     def is_finished(self) -> bool:
         return not self.waiting and not self.running

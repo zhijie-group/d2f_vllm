@@ -4,7 +4,15 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
-    
+        
+
+
+
+
+
+
+
+
         {
             "name": "PyDbg: `Dream` Accelerate Launch Debug",
             "type": "debugpy",
@@ -34,7 +42,11 @@
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/demo/test_qwen_dvllm.py",
-            "console": "integratedTerminal"
+            "console": "integratedTerminal",
+            "env": {
+                // "TRITON_INTERPRET": "1",
+                "CUDA_VISIBLE_DEVICES": "0"
+            }
         },
         {
             "name": "PyDbg: `d2f_vllm` Dream",

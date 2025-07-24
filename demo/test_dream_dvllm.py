@@ -9,6 +9,10 @@ llm = LLM(
     tensor_parallel_size=1
 )
 sampling_params = SamplingParams(temperature=0.6, max_tokens=256)
-prompts = ["Hello, Nano-vLLM."]
+prompts = [
+    "Hello, Nano-vLLM.", 
+    "What is the meaning of life in your opinion?", 
+    "Tell me a joke about AI. Say it in a funny way."
+]
 outputs = llm.generate(prompts, sampling_params)
 outputs[0]["text"]

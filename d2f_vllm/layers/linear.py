@@ -11,7 +11,6 @@ def divide(numerator, denominator):
 
 class LoRAMixin:
     """Mixin class to add LoRA support to existing linear layers."""
-    
     def __init_lora__(self, r: int = 0, lora_alpha: float = 1.0, lora_dropout: float = 0.0):
         if r > 0:
             self.r = r

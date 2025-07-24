@@ -3,7 +3,7 @@ from torch import nn
 import torch.nn.functional as F
 import torch.distributed as dist
 
-from d2f_vllm.utils.context import get_context
+from d2f_vllm.utils.context import get_context_causal_lm
 
 
 class VocabParallelEmbedding(nn.Module):
@@ -59,7 +59,7 @@ class ParallelLMHead(VocabParallelEmbedding):
             self.register_parameter("bias", None)
 
     def forward(self, x: torch.Tensor):
-        context = get_context()
+        context = get_context_causal_lm()
         if context.is_prefill:
             last_indices = context.cu_seqlens_q[1:] - 1
             x = x[last_indices].contiguous()
