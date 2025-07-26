@@ -632,7 +632,7 @@ class DreamLoRA(LM):
                 # 确定哪些块需要添加到缓存中
                 blocks_to_cache = [bid for bid, state in block_states.items() 
                                 if state['state'] == 'to_cache']
-                    
+                
                 # 确定需要处理的部分
                 cache_length = 0 if past_key_values is None else past_key_values.get_seq_length()
                 

@@ -1,10 +1,16 @@
+import torch
+
 from collections import deque
 from typing import Tuple, List, Deque
 from abc import ABC, abstractmethod
 
 from d2f_vllm.config import Config
-from d2f_vllm.engine.sequence import SequenceBase, SequenceStatus
-from d2f_vllm.engine.block_manager import BlockManager
+from d2f_vllm.engine.sequence import (
+    SequenceBase, SequenceStatus, 
+    SequenceForDiffusionLM, SequenceForCausalLM
+)
+from d2f_vllm.layers.sampler import SampleOutputForDiffusionLM
+from d2f_vllm.engine.block_manager import AutoBlockManager
 
 
 class SchedulerBase(ABC):
@@ -12,7 +18,7 @@ class SchedulerBase(ABC):
         self.max_num_seqs = config.max_num_seqs
         self.max_num_batched_tokens = config.max_num_batched_tokens
         self.eos = config.eos
-        self.block_manager = BlockManager(config.num_kvcache_blocks, config.kvcache_block_size)
+        self.block_manager = AutoBlockManager.from_config(config)
         self.waiting: Deque[SequenceBase] = deque()
         self.running: Deque[SequenceBase] = deque()
 
@@ -33,7 +39,7 @@ class SchedulerBase(ABC):
         pass
     
     @abstractmethod
-    def postprocess(self, seqs: List[SequenceBase], token_ids: List[int]) -> List[bool]:
+    def postprocess(self, seqs: List[SequenceBase], token_ids: List[int]):
         pass
     
 
@@ -44,10 +50,10 @@ class SchedulerForCausalLM(SchedulerBase):
     def is_finished(self) -> bool:
         return not self.waiting and not self.running
 
-    def add(self, seq: SequenceBase) -> None:
+    def add(self, seq: SequenceForCausalLM) -> None:
         self.waiting.append(seq)
 
-    def schedule(self) -> Tuple[List[SequenceBase], bool]:
+    def schedule(self) -> Tuple[List[SequenceForCausalLM], bool]:
         # prefill
         scheduled_seqs = []
         num_seqs = 0
@@ -84,12 +90,12 @@ class SchedulerForCausalLM(SchedulerBase):
         self.running.extendleft(reversed(scheduled_seqs))
         return scheduled_seqs, False
 
-    def preempt(self, seq: SequenceBase) -> None:
+    def preempt(self, seq: SequenceForCausalLM) -> None:
         seq.status = SequenceStatus.WAITING
         self.block_manager.free(seq)
         self.waiting.appendleft(seq)
 
-    def postprocess(self, seqs: List[SequenceBase], token_ids: List[int]) -> List[bool]:
+    def postprocess(self, seqs: List[SequenceForCausalLM], token_ids: List[int]) -> None:
         for seq, token_id in zip(seqs, token_ids):
             seq.append_token(token_id)
             if (not seq.ignore_eos and token_id == self.eos) \
@@ -108,7 +114,7 @@ class SchedulerForDiffusionLM(SchedulerBase):
     def is_finished(self) -> bool:
         return not self.waiting and not self.running
 
-    def add(self, seq: SequenceBase) -> None:
+    def add(self, seq: SequenceForDiffusionLM) -> None:
         self.waiting.append(seq)
     
     def schedule(self):
@@ -148,20 +154,32 @@ class SchedulerForDiffusionLM(SchedulerBase):
         self.running.extendleft(reversed(scheduled_seqs))
         return scheduled_seqs, False
 
-    def preempt(self, seq: SequenceBase) -> None:
+    def preempt(self, seq: SequenceForDiffusionLM) -> None:
         seq.status = SequenceStatus.WAITING
         self.block_manager.free(seq)
         self.waiting.appendleft(seq)
 
-    def postprocess(self, seqs: List[SequenceBase], token_ids: List[int]) -> List[bool]:
-        for seq, token_id in zip(seqs, token_ids):
-            seq.append_token(token_id)
-            if (not seq.ignore_eos and token_id == self.eos) \
-                or seq.num_completion_tokens == seq.max_tokens:
-                seq.status = SequenceStatus.FINISHED
-                self.block_manager.free(seq)
-                self.running.remove(seq)
-    
+    def postprocess(self, seqs: List[SequenceForDiffusionLM], sample_output: SampleOutputForDiffusionLM) -> None:
+        for seq in seqs:
+            seq.reset_new_tokens()
+            seq_id = str(seq.seq_id)
+            cur_true_local_ids_sub_map = sample_output.true_local_ids_map.get(seq_id, {})
+            cur_accepted_ids_sub_map = sample_output.accepted_ids_map.get(seq_id, {})
+            cur_sampled_tokens_sub_map = sample_output.sampled_tokens_map.get(seq_id, {})
+            for block_id, accepted_ids in cur_accepted_ids_sub_map.items():
+                if len(accepted_ids) > 0:
+                    block = seq.diffusion_blocks[int(block_id)]
+                    sampled_tokens = cur_sampled_tokens_sub_map.get(block_id, [])
+                    true_local_ids = cur_true_local_ids_sub_map.get(block_id, [])
+
+                    for true_local_id, accepted_id in zip(true_local_ids, accepted_ids):
+                        block.modify_token(true_local_id, sampled_tokens[accepted_id])
+                        if ((not seq.ignore_eos and sampled_tokens[accepted_id].item() == self.eos) 
+                            or seq.num_completion_tokens == seq.max_tokens):
+                            seq.status = SequenceStatus.FINISHED
+                            self.block_manager.free(seq)
+                            self.running.remove(seq)
+            seq.post_process()
 
 class AutoScheduler:
     SCHEDULER_MAPPING = {

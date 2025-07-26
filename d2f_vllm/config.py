@@ -11,7 +11,11 @@ class Config:
     model_type: str = "diffusion_lm" # "causal_lm" or "diffusion_lm"
     mask_token_id: int = 151666
     diffusion_block_size: int = 32
-    to_cache_threshold: float = 0.9
+    
+    accept_threshold: float = 0.95
+    complete_threshold: float = 0.9
+    add_new_block_threshold: float = 0.1
+    
     use_lora: bool = False
     max_num_batched_tokens: int = 16384
     max_num_seqs: int = 512

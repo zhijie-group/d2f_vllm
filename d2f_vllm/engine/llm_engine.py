@@ -57,10 +57,13 @@ class LLMEngine:
 
     def step(self):
         seqs, is_prefill = self.scheduler.schedule()
-        token_ids = self.model_runner.call("run", seqs, is_prefill)
-        self.scheduler.postprocess(seqs, token_ids)
+        sample_output = self.model_runner.call("run", seqs, is_prefill)
+        self.scheduler.postprocess(seqs, sample_output)
         outputs = [(seq.seq_id, seq.completion_token_ids) for seq in seqs if seq.is_finished]
-        num_tokens = sum(len(seq) for seq in seqs) if is_prefill else -len(seqs)
+        if self.engine_type == "causal_lm":
+            num_tokens = sum(len(seq) for seq in seqs) if is_prefill else -len(seqs)
+        else:
+            num_tokens = sum(seq.diffusion_num_tokens for seq in seqs) if is_prefill else sum(seq.new_tokens for seq in seqs)
         return outputs, num_tokens
 
     def is_finished(self):

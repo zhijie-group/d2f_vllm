@@ -10,7 +10,10 @@ from einops import rearrange
 from torch.nn.attention.flex_attention import flex_attention, create_block_mask
 from flash_attn import flash_attn_varlen_func, flash_attn_with_kvcache
 
-from d2f_vllm.utils.context import get_context_causal_lm, get_context_diffusion_lm
+from d2f_vllm.utils.context import (
+    ContextForCausalLM, ContextForDiffusionLM, 
+    get_context_causal_lm, get_context_diffusion_lm
+)
 
 
 @triton.jit
@@ -53,7 +56,11 @@ def store_kvcache(
         value, value.stride(0),
         k_cache, v_cache, slot_mapping, D
     )
-    
+
+def load_kvcache(
+    k_cache: torch.Tensor, v_cache: torch.Tensor,
+    block_table: torch.Tensor, cache_seqlens):
+    pass 
 
 class Attention(nn.Module):
     def __init__(
@@ -87,20 +94,24 @@ class Attention(nn.Module):
             )
         return self._block_mask_cache[cache_key]
 
-    # TODO: Support Block-Mask, using Flex Attention first, Flash Attention does not support it yet
+    # TODO: Optimize Diffusion LM Attention !!!
     def forward(self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor,
                 mask: List[torch.Tensor] | None = None) -> torch.Tensor:
         o: torch.Tensor
         q = q.view(-1, self.num_heads, self.head_dim)
         k = k.view(-1, self.num_kv_heads, self.head_dim)
         v = v.view(-1, self.num_kv_heads, self.head_dim)
-        context = get_context_causal_lm() if self.model_type == 'causal_lm' else get_context_diffusion_lm()
+        context: ContextForDiffusionLM = get_context_causal_lm() if self.model_type == 'causal_lm' else get_context_diffusion_lm()
         k_cache, v_cache = self.k_cache, self.v_cache
         if k_cache.numel() and v_cache.numel():
-            store_kvcache(k, v, k_cache, v_cache, context.slot_mapping, self.model_type)
+            if self.model_type == 'diffusion_lm' and context.slot_mapping.numel() == 0:
+                pass
+            else:
+                store_kvcache(k, v, k_cache, v_cache, context.slot_mapping, self.model_type)
         if context.is_prefill:
             if context.block_tables is not None: # prefix cache
-                k, v = k_cache, v_cache
+                if self.model_type == 'causal_lm':
+                    k, v = k_cache, v_cache
             if self.model_type == 'causal_lm':
                 o = flash_attn_varlen_func(
                     q, k, v,
@@ -124,7 +135,28 @@ class Attention(nn.Module):
                     softmax_scale=self.scale, causal=self.causal
                 )
             elif self.model_type == 'diffusion_lm':
-                pass
+                transpose_fn = lambda x: rearrange(x, 's h d -> h s d').unsqueeze(0)
+                q = transpose_fn(q)
+                k_list, v_list = [torch.split(tensor, context.seq_split, dim=0) for tensor in (k, v)]
+                cat_k_list = []
+                cat_v_list = []
+                for seq_idx, (k, v) in enumerate(zip(k_list, v_list)):
+                    cur_context_len = context.context_lens[seq_idx]
+                    k_cache_temp, v_cache_temp = None, None
+                    for mem_block_idx in context.block_tables[seq_idx]:
+                        k_mem_block, v_mem_block = k_cache[mem_block_idx], v_cache[mem_block_idx]
+                        mem_block_size = k_cache.shape[1]
+                        cur_window = mem_block_size if mem_block_size <= cur_context_len else cur_context_len % mem_block_size
+                        cur_context_len = cur_context_len - cur_window
+                        k_cache_temp = k_mem_block[:cur_window] if k_cache_temp is None else torch.cat((k_cache_temp, k_mem_block[:cur_window]), dim=0)
+                        v_cache_temp = v_mem_block[:cur_window] if v_cache_temp is None else torch.cat((v_cache_temp, v_mem_block[:cur_window]), dim=0)
+                    cat_k_list.extend([k_cache_temp, k])
+                    cat_v_list.extend([v_cache_temp, v])
+                k_cache, v_cache = transpose_fn(torch.cat(cat_k_list, dim=0)), transpose_fn(torch.cat(cat_v_list, dim=0))
+                B, H, Sq, _ = q.shape
+                B, H, Skv, _ = k_cache.shape
+                dllm_block_mask = self.dllm_block_mask(context.block_mask, B, H, Sq, Skv, str(q.device))
+                o = self.flex_attention(q, k_cache, v_cache, block_mask=dllm_block_mask, enable_gqa=True).squeeze(0)
             else:
                 raise ValueError(f"Unsupported model type: {self.model_type}")
         if self.model_type == 'causal_lm':

@@ -2,10 +2,12 @@ import xxhash
 import numpy as np
 
 from collections import deque
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import List, Dict, Deque, Set
 
-from d2f_vllm.engine.sequence import SequenceBase
+from d2f_vllm.config import Config
+from d2f_vllm.engine.sequence import SequenceBase, SequenceForCausalLM, SequenceForDiffusionLM
 
 
 @dataclass
@@ -25,7 +27,7 @@ class Block:
         self.token_ids = []
 
 
-class BlockManager:
+class BlockManagerBase(ABC):
     def __init__(self, num_blocks: int, block_size: int):
         assert num_blocks > 0
         self.block_size = block_size
@@ -92,8 +94,9 @@ class BlockManager:
         seq.num_cached_tokens = 0
         seq.block_table.clear()
 
+    @abstractmethod
     def can_append(self, seq: SequenceBase) -> bool:
-        return len(self.free_block_ids) >= (len(seq) % self.block_size == 1)
+        pass
 
     def may_append(self, seq: SequenceBase):
         block_table = seq.block_table
@@ -112,3 +115,26 @@ class BlockManager:
             self.hash_to_block_id[h] = last_block.block_id
         else:
             assert last_block.hash == -1
+            
+
+class BlockManagerForCausalLM(BlockManagerBase):
+    def can_append(self, seq: SequenceForCausalLM) -> bool:
+        return len(self.free_block_ids) >= (len(seq) % self.block_size == 1)
+    
+
+class BlockManagerForDiffusionLM(BlockManagerBase):
+    def can_append(self, seq: SequenceForDiffusionLM) -> bool:
+        return len(self.free_block_ids) >= (seq.caching_num_tokens % self.block_size == 1)
+    
+
+class AutoBlockManager:
+    BLOCK_MANAGER_MAPPING = {
+        "causal_lm": BlockManagerForCausalLM,
+        "diffusion_lm": BlockManagerForDiffusionLM,
+    }
+    @classmethod
+    def from_config(cls, config: Config):
+        block_manager_cls = cls.BLOCK_MANAGER_MAPPING.get(config.model_type)
+        if not block_manager_cls:
+            raise ValueError(f"Unsupported model type: {config.model_type}")
+        return block_manager_cls(config.num_kvcache_blocks, config.kvcache_block_size)

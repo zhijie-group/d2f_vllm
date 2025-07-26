@@ -10,6 +10,6 @@ class AutoModelLM:
         "dream": DreamForDiffusionLM
     }
     @classmethod
-    def from_pretrained(cls, config: Config):
+    def from_config(cls, config: Config):
         model = cls.MODEL_MAPPING[config.model_name](config.hf_config)
         return load_model(model, config)

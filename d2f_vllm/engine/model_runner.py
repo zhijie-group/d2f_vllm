@@ -10,7 +10,7 @@ from multiprocessing.shared_memory import SharedMemory
 from d2f_vllm.config import Config
 from d2f_vllm.engine.sequence import SequenceForCausalLM, SequenceForDiffusionLM, SequenceBase
 from d2f_vllm.models.auto_model import AutoModelLM
-from d2f_vllm.layers.sampler import Sampler
+from d2f_vllm.layers.sampler import AutoSampler
 from d2f_vllm.utils.context import (
     set_context_causal_lm, 
     get_context_causal_lm, 
@@ -39,8 +39,8 @@ class ModelRunnerBase(ABC):
         default_dtype = torch.get_default_dtype()
         torch.set_default_dtype(hf_config.torch_dtype)
         torch.set_default_device("cuda")
-        self.model = AutoModelLM.from_pretrained(config)
-        self.sampler = Sampler()
+        self.model = AutoModelLM.from_config(config)
+        self.sampler = AutoSampler.from_config(config)
         self.warmup_model()
         self.allocate_kv_cache() # NOCHANGE
         if not self.enforce_eager:
@@ -320,7 +320,7 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
         self.mask_token_id = config.mask_token_id
             
     def warmup_model(self):
-        # return
+        return
         torch.cuda.empty_cache()
         torch.cuda.reset_peak_memory_stats()
         max_num_batched_tokens, max_model_len = self.config.max_num_batched_tokens, self.config.max_model_len
@@ -378,31 +378,51 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
         positions = []
         slot_mapping = []
         context_lens = []
-        for seq in seqs:
-            input_ids.append(seq.last_token)
-            positions.append(len(seq))
-            context_lens.append(len(seq))
-            slot_mapping.append(seq.block_table[-1] * self.block_size + seq.last_block_num_tokens  - 1)
+        seq_split = []
+        for seq in seqs: 
+            temp_input_ids, temp_positions, temp_context_len = seq.diffusion_decoding_inputs()
+            seq_split.append(len(temp_input_ids))
+            input_ids.extend(temp_input_ids)
+            positions.extend(temp_positions)
+            context_lens.append(temp_context_len)
+            for diffusion_block in seq.diffusion_blocks:
+                if diffusion_block.is_to_cache:
+                    slot_mapping.extend(seq.block_table[-1] * self.block_size + list(range(*diffusion_block.mem_block_range))  - 1)
         input_ids = torch.tensor(input_ids, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
         positions = torch.tensor(positions, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
         slot_mapping = torch.tensor(slot_mapping, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
         context_lens = torch.tensor(context_lens, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
         block_tables = self.prepare_block_tables(seqs)
-        set_context_causal_lm(False, slot_mapping=slot_mapping, context_lens=context_lens, block_tables=block_tables)
+        set_context_diffusion_lm(False, slot_mapping=slot_mapping, context_lens=context_lens, block_tables=block_tables, seqs=seqs, seq_split=seq_split)
         return input_ids, positions
 
     @torch.inference_mode()
     def run_model(self, input_ids: torch.Tensor, positions: torch.Tensor, is_prefill: bool):
         if is_prefill or self.enforce_eager or input_ids.size(0) > 512:
             return self.model.compute_logits(self.model(input_ids, positions))
+        else:
+            bs = input_ids.size(0)
+            context = get_context_diffusion_lm()
+            graph = self.graphs[next(x for x in self.graph_bs if x >= bs)]
+            graph_vars = self.graph_vars
+            for k, v in graph_vars.items():
+                if k != "outputs":
+                    v.zero_()
+            graph_vars["input_ids"][:bs] = input_ids
+            graph_vars["positions"][:bs] = positions
+            graph_vars["slot_mapping"][:bs] = context.slot_mapping
+            graph_vars["context_lens"][:bs] = context.context_lens
+            graph_vars["block_tables"][:bs, :context.block_tables.size(1)] = context.block_tables
+            graph.replay()
+            return self.model.compute_logits(graph_vars["outputs"][:bs])
 
     def run(self, seqs: List[SequenceBase], is_prefill: bool) -> List[int]:
         input_ids, positions = self.prepare_prefill(seqs) if is_prefill else self.prepare_decode(seqs)
         temperatures = self.prepare_sample(seqs) if self.rank == 0 else None
         logits = self.run_model(input_ids, positions, is_prefill)
-        token_ids = self.sampler(logits, temperatures).tolist() if self.rank == 0 else None
+        sample_output = self.sampler(logits, temperatures) if self.rank == 0 else None
         reset_context_diffusion_lm()
-        return token_ids
+        return sample_output
 
     @torch.inference_mode()
     def capture_cudagraph(self):

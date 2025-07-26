@@ -193,7 +193,7 @@ class DreamModel(nn.Module):
     ) -> torch.Tensor:
         hidden_states = self.embed_tokens(input_ids)
         residual = None
-        for layer in self.layers:
+        for _, layer in enumerate(self.layers):
             hidden_states, residual = layer(positions, hidden_states, residual, mask)
         hidden_states, _ = self.norm(hidden_states, residual)
         return hidden_states
@@ -209,7 +209,7 @@ class DreamForDiffusionLM(nn.Module):
     ) -> None:
         super().__init__()
         self.model = DreamModel(config)
-        self.lm_head = ParallelLMHead(config.vocab_size, config.hidden_size)
+        self.lm_head = ParallelLMHead(config.vocab_size, config.hidden_size, model_type='diffusion_lm')
         if getattr(config, 'tie_word_embeddings', False):
             self.lm_head.weight.data = self.model.embed_tokens.weight.data
 

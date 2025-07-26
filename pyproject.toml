@@ -8,6 +8,7 @@ dependencies = [
     "accelerate>=1.9.0",
     "bpytop>=1.0.68",
     "datasets>=4.0.0",
+    "easydict>=1.13",
     "einops>=0.8.1",
     "flash-attn>=2.8.1",
     "lm-eval>=0.4.9",

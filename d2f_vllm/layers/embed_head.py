@@ -3,7 +3,7 @@ from torch import nn
 import torch.nn.functional as F
 import torch.distributed as dist
 
-from d2f_vllm.utils.context import get_context_causal_lm
+from d2f_vllm.utils.context import get_context_causal_lm, get_context_diffusion_lm
 
 
 class VocabParallelEmbedding(nn.Module):
@@ -50,6 +50,7 @@ class ParallelLMHead(VocabParallelEmbedding):
         num_embeddings: int,
         embedding_dim: int,
         bias: bool = False,
+        model_type: str = 'causal_lm',
     ):
         super().__init__(num_embeddings, embedding_dim)
         if bias:
@@ -57,10 +58,11 @@ class ParallelLMHead(VocabParallelEmbedding):
             self.bias.weight_loader = self.weight_loader
         else:
             self.register_parameter("bias", None)
+        self.model_type = model_type
 
     def forward(self, x: torch.Tensor):
-        context = get_context_causal_lm()
-        if context.is_prefill:
+        context = get_context_causal_lm() if self.model_type == 'causal_lm' else get_context_diffusion_lm()
+        if context.is_prefill and self.model_type == 'causal_lm':
             last_indices = context.cu_seqlens_q[1:] - 1
             x = x[last_indices].contiguous()
         logits = F.linear(x, self.weight, self.bias)
