@@ -4,12 +4,8 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
-    
         
 
-        
-
-        
 
         {
             "name": "PyDbg: `Dream` Accelerate Launch Debug",
@@ -53,7 +49,7 @@
             "program": "${workspaceFolder}/demo/test_dream_dvllm.py",
             "console": "integratedTerminal",
             "env": {
-                "CUDA_VISIBLE_DEVICES": "7"
+                "CUDA_VISIBLE_DEVICES": "6,7"
             }
         }
     ]

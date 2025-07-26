@@ -5,10 +5,10 @@ import torch.nn as nn
 import triton.language as tl
 
 from typing import List
-from functools import lru_cache
+from functools import lru_cache, partial
 from einops import rearrange
 from torch.nn.attention.flex_attention import flex_attention, create_block_mask
-from flash_attn import flash_attn_varlen_func, flash_attn_with_kvcache
+# from flash_attn import flash_attn_varlen_func, flash_attn_with_kvcache
 
 from d2f_vllm.utils.context import (
     ContextForCausalLM, ContextForDiffusionLM, 
@@ -79,7 +79,16 @@ class Attention(nn.Module):
         self.k_cache = self.v_cache = torch.tensor([])
         self.causal = model_type == 'causal_lm'
         self.model_type = model_type
-        self.flex_attention = torch.compile(flex_attention, dynamic=False)
+        is_rtx_xx90 = lambda x: "4090" in x or "3090" in x
+        kernel_options = {
+            "BLOCK_M": 64,
+            "BLOCK_N": 64,
+            "BLOCK_M1": 32,
+            "BLOCK_N1": 64,
+            "BLOCK_M2": 64,
+            "BLOCK_N2": 32,
+        } if is_rtx_xx90(torch.cuda.get_device_name(0)) else None
+        self.flex_attention = torch.compile(partial(flex_attention, kernel_options=kernel_options), dynamic=False)
         self._block_mask_cache = {}
         
     @lru_cache(maxsize=32)

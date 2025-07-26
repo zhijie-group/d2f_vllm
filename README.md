@@ -41,5 +41,5 @@ If not working, build `flash-attn` from scratch. This may take some while (most 
 ```shell
 git submodule update --init --recursive
 cd third_party/flash-attn
-MAX_JOBS=$(nproc) uv pip install . --no-build-isolation --verbose
+MAX_JOBS=$(nproc) python setup.py install --verbose
 ```

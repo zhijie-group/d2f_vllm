@@ -4,7 +4,7 @@ import torch.distributed as dist
 from transformers import Qwen3Config
 
 from d2f_vllm.layers.activation import SiluAndMul
-from d2f_vllm.layers.attention import Attention
+from d2f_vllm.layers.attention_v1 import Attention
 from d2f_vllm.layers.layernorm import RMSNorm
 from d2f_vllm.layers.linear import QKVParallelLinear, MergedColumnParallelLinear, RowParallelLinear
 from d2f_vllm.layers.rotary_embedding import get_rope

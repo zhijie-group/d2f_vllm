@@ -76,17 +76,6 @@ class SequenceBase:
         self.last_token = token_id
         self.num_tokens += 1
 
-    def __getstate__(self) -> Tuple[int, int, int, List[int], int]:
-        return (self.num_tokens, self.num_prompt_tokens, self.num_cached_tokens, self.block_table,
-                self.token_ids if self.num_completion_tokens == 0 else self.last_token)
-
-    def __setstate__(self, state: Tuple[int, int, int, List[int], int]) -> None:
-        self.num_tokens, self.num_prompt_tokens, self.num_cached_tokens, self.block_table = state[:-1]
-        if self.num_completion_tokens == 0:
-            self.token_ids = state[-1]
-        else:
-            self.last_token = state[-1]
-
 
 class SequenceForCausalLM(SequenceBase):
     """Standard sequence implementation for Causal Language Models."""
@@ -99,6 +88,17 @@ class SequenceForCausalLM(SequenceBase):
                 f"seq_id={self.seq_id}, status={self.status.name}, num_tokens={self.num_tokens}, "
                 f"num_prompt_tokens={self.num_prompt_tokens}, num_cached_tokens={self.num_cached_tokens}, "
                 f"temperature={self.temperature}, max_tokens={self.max_tokens}, ignore_eos={self.ignore_eos})")
+        
+    def __getstate__(self) -> Tuple[int, int, int, List[int], int]:
+        return (self.num_tokens, self.num_prompt_tokens, self.num_cached_tokens, self.block_table,
+                self.token_ids if self.num_completion_tokens == 0 else self.last_token)
+
+    def __setstate__(self, state: Tuple[int, int, int, List[int], int]) -> None:
+        self.num_tokens, self.num_prompt_tokens, self.num_cached_tokens, self.block_table = state[:-1]
+        if self.num_completion_tokens == 0:
+            self.token_ids = state[-1]
+        else:
+            self.last_token = state[-1]
 
 
 class DiffusionBlockStatus(Enum):
@@ -213,7 +213,96 @@ class SequenceForDiffusionLM(SequenceBase):
         self.diffusion_block_size = config.diffusion_block_size
         self.block_mask = None
         self.diffusion_blocks: List[DiffusionBlock] = []
+    
+    def __getstate__(self):
+        diffusion_blocks_state = []
+        for block in self.diffusion_blocks:
+            diffusion_blocks_state.append({
+                'block_id': block.block_id,
+                'status': block.status,
+                'global_start_id': block.global_start_id,
+                'global_end_id': block.global_end_id,
+                'mask_token_id': block.mask_token_id,
+                'size': block.size,
+                'is_prompt': block.is_prompt,
+                'accept_threshold': block.accept_threshold,
+                'add_new_block_threshold': block.add_new_block_threshold,
+                'complete_threshold': block.complete_threshold,
+            })
 
+        state = {
+            "seq_id": self.seq_id,
+            "status": self.status,
+            "token_ids": self.token_ids,
+            "last_token": self.last_token,
+            "num_tokens": self.num_tokens,
+            "num_prompt_tokens": self.num_prompt_tokens,
+            "num_cached_tokens": self.num_cached_tokens,
+            "block_table": self.block_table,
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+            "ignore_eos": self.ignore_eos,
+            "config": self.config,
+            "eos_token_id": self.eos_token_id,
+            "max_model_len": self.max_model_len,
+            "mask_token_id": self.mask_token_id,
+            "diffusion_block_size": self.diffusion_block_size,
+            "diffusion_blocks_state": diffusion_blocks_state,
+            "input_token_ids": getattr(self, "input_token_ids", []),
+            "input_num_tokens": getattr(self, "input_num_tokens", 0),
+            "input_num_prompt_tokens": getattr(self, "input_num_prompt_tokens", 0),
+            "new_tokens": getattr(self, "new_tokens", 0),
+            "block_mask": self.block_mask,
+        }
+        return state
+
+    def __setstate__(self, state):
+        self.seq_id = state["seq_id"]
+        self.status = state["status"]
+        self.token_ids = state["token_ids"]
+        self.last_token = state["last_token"]
+        self.num_tokens = state["num_tokens"]
+        self.num_prompt_tokens = state["num_prompt_tokens"]
+        self.num_cached_tokens = state["num_cached_tokens"]
+        self.block_table = state["block_table"]
+        self.temperature = state["temperature"]
+        self.max_tokens = state["max_tokens"]
+        self.ignore_eos = state["ignore_eos"]
+
+        self.config = state["config"]
+        self.eos_token_id = state["eos_token_id"]
+        self.max_model_len = state["max_model_len"]
+        self.mask_token_id = state["mask_token_id"]
+        self.diffusion_block_size = state["diffusion_block_size"]
+
+        self.input_token_ids = state.get("input_token_ids", [])
+        self.input_num_tokens = state.get("input_num_tokens", 0)
+        self.input_num_prompt_tokens = state.get("input_num_prompt_tokens", 0)
+        self.new_tokens = state.get("new_tokens", 0)
+        self.block_mask = state.get("block_mask", None)
+
+        self.diffusion_blocks = []
+        pre_block = None
+        for block_state in state["diffusion_blocks_state"]:
+            block = DiffusionBlock(
+                block_id=block_state["block_id"],
+                status=block_state["status"],
+                global_start_id=block_state["global_start_id"],
+                global_end_id=block_state["global_end_id"],
+                mask_token_id=block_state["mask_token_id"],
+                size=block_state["size"],
+                is_prompt=block_state["is_prompt"],
+                accept_threshold=block_state.get("accept_threshold", 0.95),
+                add_new_block_threshold=block_state.get("add_new_block_threshold", 0.1),
+                complete_threshold=block_state.get("complete_threshold", 0.9),
+                seq=self,
+                pre_block=pre_block,
+            )
+            if pre_block is not None:
+                pre_block.suf_block = block
+            self.diffusion_blocks.append(block)
+            pre_block = block
+    
     def __repr__(self) -> str:
         return (f"SequenceForDiffusionLM(block_size={self.block_size}, counter={self.counter}, "
                 f"seq_id={self.seq_id}, status={self.status.name}, num_tokens={self.num_tokens}, "

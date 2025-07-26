@@ -52,6 +52,13 @@ class ModelRunnerBase(ABC):
         torch.set_default_dtype(default_dtype)
         if self.world_size > 1:
             if rank == 0:
+                try:
+                    shm = SharedMemory(name="d2f_vllm")
+                    shm.close()
+                    shm.unlink()
+                    print("Removed existing shared memory segment.")
+                except FileNotFoundError:
+                    print("Shared memory segment does not exist, creating a new one.")
                 self.shm = SharedMemory(name="d2f_vllm", create=True, size=2**20)
                 dist.barrier()
             else:

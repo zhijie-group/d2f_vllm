@@ -17,11 +17,11 @@ class Config:
     add_new_block_threshold: float = 0.1
     
     use_lora: bool = False
-    max_num_batched_tokens: int = 16384
-    max_num_seqs: int = 512
-    max_model_len: int = 8192
+    max_num_batched_tokens: int = 4096
+    max_num_seqs: int = 128
+    max_model_len: int = 2048
     gpu_memory_utilization: float = 0.9
-    tensor_parallel_size: int = 1
+    tensor_parallel_size: int = 2
     enforce_eager: bool = False
     hf_config: AutoConfig | None = None
     eos: int = -1
