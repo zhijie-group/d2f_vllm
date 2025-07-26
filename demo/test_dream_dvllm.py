@@ -1,7 +1,7 @@
 from d2f_vllm import LLM, SamplingParams
 llm = LLM(
     "/data1/ckpts/Dream-org/Dream-v0-Base-7B", 
-    lora_path="/data1/xck/ckpt/wx_dream_base/Decoder-ddt_test-20k",
+    lora_path="/home/jyj/workspace-2/D2F/lora_weight",
     use_lora=True,
     model_name="dream", 
     model_type="diffusion_lm",
