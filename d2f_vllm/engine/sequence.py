@@ -111,8 +111,11 @@ class DiffusionBlockStatus(Enum):
 class DiffusionBlock:
     block_id: int = 0
     status: DiffusionBlockStatus = DiffusionBlockStatus.ACTIVE
+    
     global_start_id: int = 0
     global_end_id: int | None = None
+    cursor: int = 0
+    
     mask_token_id: int = 151666
     size: int = 32
     is_prompt: bool = False
@@ -130,6 +133,9 @@ class DiffusionBlock:
 
     def __getitem__(self, key: int) -> int:
         return self.seq[self.global_start_id + key]
+    
+    def __len__(self) -> int:
+        return self.size
     
     @property
     def current_complete_ratio(self) -> float:
@@ -180,11 +186,10 @@ class DiffusionBlock:
         in_cache_blocks = list(range(sum(self.seq.in_cache_blocks)))
         offset -= sum(self.seq.diffusion_blocks[block_id].size for block_id in in_cache_blocks)
         return [mask_token_id + offset for mask_token_id in self.local_mask_token_ids]
-
+    
     @property
-    def mem_block_range(self):
-        get_idx_in_mem_block = lambda x: x - (self.seq.num_blocks - 1) * self.seq.block_size
-        return (get_idx_in_mem_block(self.global_start_id), get_idx_in_mem_block(self.global_end_id))
+    def left_length(self) -> int:
+        return self.size - self.cursor
         
     def to_cache(self) -> None:
         if self.available_to_cache and not self.is_in_cache:
@@ -212,6 +217,7 @@ class SequenceForDiffusionLM(SequenceBase):
         self.mask_token_id = config.mask_token_id
         self.diffusion_block_size = config.diffusion_block_size
         self.block_mask = None
+        self.meet_eos = False
         self.diffusion_blocks: List[DiffusionBlock] = []
     
     def __getstate__(self):
@@ -252,6 +258,7 @@ class SequenceForDiffusionLM(SequenceBase):
             "input_num_tokens": getattr(self, "input_num_tokens", 0),
             "input_num_prompt_tokens": getattr(self, "input_num_prompt_tokens", 0),
             "new_tokens": getattr(self, "new_tokens", 0),
+            "meet_eos": self.meet_eos,
             "block_mask": self.block_mask,
         }
         return state
@@ -268,6 +275,7 @@ class SequenceForDiffusionLM(SequenceBase):
         self.temperature = state["temperature"]
         self.max_tokens = state["max_tokens"]
         self.ignore_eos = state["ignore_eos"]
+        self.meet_eos = state["meet_eos"]
 
         self.config = state["config"]
         self.eos_token_id = state["eos_token_id"]
@@ -344,8 +352,8 @@ class SequenceForDiffusionLM(SequenceBase):
         return [to_cache or in_cache for to_cache, in_cache in zip(self.to_cache_blocks, self.in_cache_blocks)]
     
     @property
-    def caching_block_ids(self) -> List[int]:
-        return [idx for idx, (to_cache, in_cache) in enumerate(zip(self.to_cache_blocks, self.in_cache_blocks)) if to_cache or in_cache]
+    def cached_block_ids(self) -> List[int]:
+        return [idx for idx, in_cache in enumerate(self.in_cache_blocks) if in_cache]
 
     @property
     def mask_tokens(self) -> List[bool]:
@@ -367,15 +375,34 @@ class SequenceForDiffusionLM(SequenceBase):
     def diffusion_num_tokens(self) -> int:
         return sum(self.mask_tokens)
     
+    @property
+    def mem_block_to_diffusion_blocks_map(self) -> List[List[int]]:
+        mapping = []
+        for block_id in range(self.num_blocks):
+            window_start = block_id * self.block_size
+            window_length = self.block_size if block_id < self.num_blocks - 1 else self.last_block_num_tokens
+            mapping.append([self.token_to_diffusion_block_id(token_id) for token_id in range(window_start, window_start + window_length)]) # build up token-wise mapping
+        return mapping
+    
+    def token_to_diffusion_block_id(self, token_id: int) -> int:
+        if token_id < self.input_num_tokens:
+            return 0
+        else:
+            return (token_id - self.input_num_tokens) // self.diffusion_block_size + 1
+    
+    @property
+    def num_diffusion_blocks(self) -> int:
+        return len(self.diffusion_blocks)
+    
     def diffusion_decoding_inputs(self) -> Tuple[List[int], List[int], int]:
-        active_blocks = self.diffusion_blocks[self.caching_block_ids[-1] + 1:]
-        assert len(active_blocks) == sum(self.active_blocks)
+        to_cache_and_active_blocks = self.diffusion_blocks[self.cached_block_ids[-1] + 1:]
+        assert len(to_cache_and_active_blocks) == sum(self.active_blocks) + sum(self.to_cache_blocks)
         
         input_tokens = []
         positions = []
-        context_len = sum(self.diffusion_blocks[block_id].size for block_id in self.caching_block_ids)
+        context_len = sum(self.diffusion_blocks[block_id].size for block_id in self.cached_block_ids)
         temp_context_len = context_len
-        for block in active_blocks:
+        for block in to_cache_and_active_blocks:
             input_tokens.extend(block.token_ids)
             positions.extend([token_id + temp_context_len for token_id in range(block.size)])
             temp_context_len += block.size
@@ -387,17 +414,14 @@ class SequenceForDiffusionLM(SequenceBase):
     
     def post_process(self) -> None:
         for block_id, block in enumerate(self.diffusion_blocks):
+            block.cursor = 0
             previous_caching_blocks = self.caching_blocks[:block_id]
             if block.is_to_cache:
                 block.in_cache()
-            if sum(block.local_mask_tokens) == 0 and sum(previous_caching_blocks) == len(previous_caching_blocks):
+            elif sum(block.local_mask_tokens) == 0 and sum(previous_caching_blocks) == len(previous_caching_blocks):
                 block.to_cache()
             else:
                 break
-    
-    def store_block_in_cache(self, block_id: int) -> None:
-        block = self.diffusion_blocks[block_id]
-        block.in_cache()
         
     def generate_block_mask(self) -> None:
         max_model_len = self.config.max_model_len
@@ -436,7 +460,7 @@ class SequenceForDiffusionLM(SequenceBase):
                 )
             )
         
-        if self.diffusion_blocks[-1].add_new_block:
+        if self.diffusion_blocks[-1].add_new_block and not self.meet_eos:
             added_num_tokens = (
                 self.diffusion_block_size 
                 if self.num_tokens + self.diffusion_block_size <= self.max_model_len 

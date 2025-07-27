@@ -64,7 +64,7 @@ class LLMEngine:
             num_tokens = sum(len(seq) for seq in seqs) if is_prefill else -len(seqs)
         else:
             num_tokens = sum(seq.diffusion_num_tokens for seq in seqs) if is_prefill else sum(seq.new_tokens for seq in seqs)
-        return outputs, num_tokens
+        return outputs, num_tokens, is_prefill
 
     def is_finished(self):
         return self.scheduler.is_finished()
@@ -85,12 +85,12 @@ class LLMEngine:
         prefill_throughput = decode_throughput = 0.
         while not self.is_finished():
             t = perf_counter()
-            output, num_tokens = self.step()
+            output, num_tokens, is_prefill = self.step()
             if use_tqdm:
-                if num_tokens > 0:
+                if is_prefill:
                     prefill_throughput = num_tokens / (perf_counter() - t)
                 else:
-                    decode_throughput = -num_tokens / (perf_counter() - t)
+                    decode_throughput = num_tokens / (perf_counter() - t)
                 pbar.set_postfix({
                     "Prefill": f"{int(prefill_throughput)}tok/s",
                     "Decode": f"{int(decode_throughput)}tok/s",

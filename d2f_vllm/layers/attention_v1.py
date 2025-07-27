@@ -8,7 +8,14 @@ from typing import List
 from functools import lru_cache, partial
 from einops import rearrange
 from torch.nn.attention.flex_attention import flex_attention, create_block_mask
-# from flash_attn import flash_attn_varlen_func, flash_attn_with_kvcache
+
+is_rtx_xx90 = lambda x: "4090" in x or "3090" in x
+if is_rtx_xx90(torch.cuda.get_device_name(0)):
+    # Placeholder for non-flash attention implementation
+    flash_attn_varlen_func = None
+    flash_attn_with_kvcache = None
+else:
+    from flash_attn import flash_attn_varlen_func, flash_attn_with_kvcache
 
 from d2f_vllm.utils.context import (
     ContextForCausalLM, ContextForDiffusionLM, 
@@ -79,7 +86,6 @@ class Attention(nn.Module):
         self.k_cache = self.v_cache = torch.tensor([])
         self.causal = model_type == 'causal_lm'
         self.model_type = model_type
-        is_rtx_xx90 = lambda x: "4090" in x or "3090" in x
         kernel_options = {
             "BLOCK_M": 64,
             "BLOCK_N": 64,
@@ -88,7 +94,7 @@ class Attention(nn.Module):
             "BLOCK_M2": 64,
             "BLOCK_N2": 32,
         } if is_rtx_xx90(torch.cuda.get_device_name(0)) else None
-        self.flex_attention = torch.compile(partial(flex_attention, kernel_options=kernel_options), dynamic=False)
+        self.flex_attention = torch.compile(partial(flex_attention, kernel_options=kernel_options, enable_gqa=True), dynamic=False)
         self._block_mask_cache = {}
         
     @lru_cache(maxsize=32)
@@ -133,7 +139,7 @@ class Attention(nn.Module):
                 q, k, v = [transpose_fn(tensor) for tensor in (q, k, v)]
                 B, H, S, _ = q.shape
                 dllm_block_mask = self.dllm_block_mask(context.block_mask, B, H, S, S, str(q.device))
-                o = self.flex_attention(q, k, v, block_mask=dllm_block_mask, enable_gqa=True).squeeze(0)
+                o = self.flex_attention(q, k, v, block_mask=dllm_block_mask).squeeze(0)
             else:
                 raise ValueError(f"Unsupported model type: {self.model_type}")
         else: # decode
@@ -149,10 +155,13 @@ class Attention(nn.Module):
                 k_list, v_list = [torch.split(tensor, context.seq_split, dim=0) for tensor in (k, v)]
                 cat_k_list = []
                 cat_v_list = []
+                # TODO: Possibly implement parallel loading kernel?
                 for seq_idx, (k, v) in enumerate(zip(k_list, v_list)):
                     cur_context_len = context.context_lens[seq_idx]
                     k_cache_temp, v_cache_temp = None, None
                     for mem_block_idx in context.block_tables[seq_idx]:
+                        if mem_block_idx.item() == -1:
+                            continue
                         k_mem_block, v_mem_block = k_cache[mem_block_idx], v_cache[mem_block_idx]
                         mem_block_size = k_cache.shape[1]
                         cur_window = mem_block_size if mem_block_size <= cur_context_len else cur_context_len % mem_block_size
@@ -165,7 +174,7 @@ class Attention(nn.Module):
                 B, H, Sq, _ = q.shape
                 B, H, Skv, _ = k_cache.shape
                 dllm_block_mask = self.dllm_block_mask(context.block_mask, B, H, Sq, Skv, str(q.device))
-                o = self.flex_attention(q, k_cache, v_cache, block_mask=dllm_block_mask, enable_gqa=True).squeeze(0)
+                o = self.flex_attention(q, k_cache, v_cache, block_mask=dllm_block_mask).squeeze(0)
             else:
                 raise ValueError(f"Unsupported model type: {self.model_type}")
         if self.model_type == 'causal_lm':

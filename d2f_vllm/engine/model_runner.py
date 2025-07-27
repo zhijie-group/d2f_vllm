@@ -386,15 +386,54 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
         slot_mapping = []
         context_lens = []
         seq_split = []
-        for seq in seqs: 
+        seq_id_to_queue_id = {}
+        # print("="*20)
+        for seq_idx_in_queue, seq in enumerate(seqs): 
+            seq_id = seq.seq_id
+            seq_id_to_queue_id[seq_id] = seq_idx_in_queue
+            # print(seq_id)
+            seq.next_diffusion_step()
             temp_input_ids, temp_positions, temp_context_len = seq.diffusion_decoding_inputs()
             seq_split.append(len(temp_input_ids))
             input_ids.extend(temp_input_ids)
             positions.extend(temp_positions)
             context_lens.append(temp_context_len)
-            for diffusion_block in seq.diffusion_blocks:
-                if diffusion_block.is_to_cache:
-                    slot_mapping.extend(seq.block_table[-1] * self.block_size + list(range(*diffusion_block.mem_block_range))  - 1)
+            mem_block_to_diffusion_blocks_map = seq.mem_block_to_diffusion_blocks_map
+            for mem_block_idx in range(seq.num_cached_blocks, seq.num_prompt_blocks):
+                left_idx = mem_block_idx * seq.block_size
+                end_idx = left_idx + seq.block_size
+                cur_map = mem_block_to_diffusion_blocks_map[mem_block_idx]
+                context_len = context_lens[seq_id_to_queue_id[seq_id]]
+                is_last_block = False
+                meet_active_block = False
+                while left_idx < end_idx and not is_last_block and not meet_active_block:
+                    local_left_idx = lambda: left_idx % seq.block_size
+                    diffusion_block = seq.diffusion_blocks[cur_map[local_left_idx()]]
+                    if cur_map[local_left_idx()] == seq.num_diffusion_blocks - 1:
+                        is_last_block = True
+                    get_step = lambda diff_blk: (
+                        diff_blk.left_length
+                        if diff_blk.left_length + local_left_idx() <= seq.block_size 
+                        else seq.block_size - local_left_idx()
+                    )
+                    if diffusion_block.is_in_cache:
+                        step = get_step(diffusion_block)
+                        diffusion_block.cursor += step
+                        left_idx += step
+                    elif diffusion_block.is_to_cache:
+                        step = get_step(diffusion_block)
+                        cur_diffusion_block_start = diffusion_block.cursor
+                        cur_diffusion_block_end = diffusion_block.cursor = diffusion_block.cursor + step
+                        left_idx += step
+                        mem_block_start = seq.block_table[mem_block_idx] * self.block_size + context_len % seq.block_size
+                        context_len += step
+                        slot_mapping.extend(list(range(mem_block_start + cur_diffusion_block_start,
+                                                       mem_block_start + cur_diffusion_block_end)))
+                    elif diffusion_block.is_active:
+                        meet_active_block = True
+                if meet_active_block:
+                    break
+        
         input_ids = torch.tensor(input_ids, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
         positions = torch.tensor(positions, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
         slot_mapping = torch.tensor(slot_mapping, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)

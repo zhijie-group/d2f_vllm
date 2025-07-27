@@ -43,3 +43,19 @@ git submodule update --init --recursive
 cd third_party/flash-attn
 MAX_JOBS=$(nproc) python setup.py install --verbose
 ```
+
+## User Guideline
+
+### Setting Generation Mode
+
+Setting `add_new_block_threshold=1.0` allows compatibility with all diffusion LLM decoding paradigms.
+
+In contrast, setting `add_new_block_threshold<1.0`, together with our `D2F` training strategy, enables support for the D2F-specific decoding paradigm.
+
+## TODO List
+
+- [] Implement KV Cache loading kernel
+- [] Implement Async Engine and Streaming Generation
+- [] Faster Flash Attention Kernel
+- [] Diffusion LM CUDA Graph Capturing
+- [] ...

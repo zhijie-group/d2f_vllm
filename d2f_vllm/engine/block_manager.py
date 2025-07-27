@@ -98,6 +98,15 @@ class BlockManagerBase(ABC):
     def can_append(self, seq: SequenceBase) -> bool:
         pass
 
+    @abstractmethod
+    def may_append(self, seq: SequenceBase):
+        pass
+            
+
+class BlockManagerForCausalLM(BlockManagerBase):
+    def can_append(self, seq: SequenceForCausalLM) -> bool:
+        return len(self.free_block_ids) >= (len(seq) % self.block_size == 1)
+    
     def may_append(self, seq: SequenceBase):
         block_table = seq.block_table
         last_block = self.blocks[block_table[-1]]
@@ -115,25 +124,37 @@ class BlockManagerBase(ABC):
             self.hash_to_block_id[h] = last_block.block_id
         else:
             assert last_block.hash == -1
-            
-
-class BlockManagerForCausalLM(BlockManagerBase):
-    def can_append(self, seq: SequenceForCausalLM) -> bool:
-        return len(self.free_block_ids) >= (len(seq) % self.block_size == 1)
-    
 
 class BlockManagerForDiffusionLM(BlockManagerBase):
     def can_append(self, seq: SequenceForDiffusionLM) -> bool:
         return len(self.free_block_ids) >= (seq.caching_num_tokens % self.block_size == 1)
     
+    def may_append(self, seq: SequenceForDiffusionLM):
+        block_table = seq.block_table
+        last_block = self.blocks[block_table[-1]]
+        if seq.caching_num_tokens % self.block_size == 1:
+            assert last_block.hash != -1
+            block_id = self.free_block_ids[0]
+            self._allocate_block(block_id)
+            block_table.append(block_id)
+        elif seq.caching_num_tokens % self.block_size == 0:
+            assert last_block.hash == -1
+            token_ids = seq.block(seq.num_blocks-1)
+            prefix = self.blocks[block_table[-2]].hash if len(block_table) > 1 else -1
+            h = self.compute_hash(token_ids, prefix)
+            last_block.update(h, token_ids)
+            self.hash_to_block_id[h] = last_block.block_id
+        else:
+            assert last_block.hash == -1
+    
 
-class AutoBlockManager:
+class AutoBlockManager(BlockManagerBase):
     BLOCK_MANAGER_MAPPING = {
         "causal_lm": BlockManagerForCausalLM,
         "diffusion_lm": BlockManagerForDiffusionLM,
     }
     @classmethod
-    def from_config(cls, config: Config):
+    def from_config(cls, config: Config) -> BlockManagerBase:
         block_manager_cls = cls.BLOCK_MANAGER_MAPPING.get(config.model_type)
         if not block_manager_cls:
             raise ValueError(f"Unsupported model type: {config.model_type}")

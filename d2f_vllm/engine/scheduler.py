@@ -167,17 +167,19 @@ class SchedulerForDiffusionLM(SchedulerBase):
             cur_sampled_tokens_sub_map = sample_output.sampled_tokens_map.get(seq_id, {})
             for block_id, accepted_ids in cur_accepted_ids_sub_map.items():
                 if len(accepted_ids) > 0:
-                    block = seq.diffusion_blocks[int(block_id)]
+                    diffusion_block = seq.diffusion_blocks[int(block_id)]
                     sampled_tokens = cur_sampled_tokens_sub_map.get(block_id, [])
                     true_local_ids = cur_true_local_ids_sub_map.get(block_id, [])
 
                     for true_local_id, accepted_id in zip(true_local_ids, accepted_ids):
-                        block.modify_token(true_local_id, sampled_tokens[accepted_id])
+                        diffusion_block.modify_token(true_local_id, sampled_tokens[accepted_id])
                         if ((not seq.ignore_eos and sampled_tokens[accepted_id].item() == self.eos) 
                             or seq.num_completion_tokens == seq.max_tokens):
-                            seq.status = SequenceStatus.FINISHED
-                            self.block_manager.free(seq)
-                            self.running.remove(seq)
+                            seq.meet_eos = True
+            if seq.meet_eos and seq.diffusion_blocks[-1].available_to_cache:
+                seq.status = SequenceStatus.FINISHED
+                self.block_manager.free(seq)
+                self.running.remove(seq)
             seq.post_process()
 
 class AutoScheduler:
