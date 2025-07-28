@@ -7,7 +7,7 @@ if __name__ == "__main__":
     model = "/data1/ckpts/Dream-org/Dream-v0-Base-7B"
     llm = LLM(
         model, 
-        lora_path="/home/jyj/workspace-2/D2F/lora_weight",
+        lora_path="/data1/xck/ckpt/wx_dream_base/Decoder-ddt_test-20k",
         use_lora=True,
         model_name="dream", 
         model_type="diffusion_lm",

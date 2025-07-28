@@ -127,26 +127,56 @@ class BlockManagerForCausalLM(BlockManagerBase):
 
 class BlockManagerForDiffusionLM(BlockManagerBase):
     def can_append(self, seq: SequenceForDiffusionLM) -> bool:
-        return len(self.free_block_ids) >= (seq.caching_num_tokens % self.block_size == 1)
+        return len(self.free_block_ids) >= (seq.cached_num_tokens % self.block_size == 1)
     
     def may_append(self, seq: SequenceForDiffusionLM):
+        # Handle edge case when no tokens are cached yet
+        if seq.cached_num_tokens == 0:
+            return
+            
         block_table = seq.block_table
+        if not block_table:
+            return
+            
         last_block = self.blocks[block_table[-1]]
-        if seq.caching_num_tokens % self.block_size == 1:
-            assert last_block.hash != -1
+        
+        if seq.cached_num_tokens % self.block_size == 1:
+            # Need to allocate a new block
+            # First, ensure the previous block has a hash if it's full
+            if last_block.hash == -1:
+                # For DiffusionLM, we need to find which block in seq.block() corresponds to this last_block
+                # Since caching_num_tokens = 257 means we have filled one block (256) and have 1 token in new block
+                prev_block_end_token = seq.cached_num_tokens - 1  # 256th token (0-indexed: 255)
+                prev_block_idx = prev_block_end_token // self.block_size  # block containing 255th token
+                
+                if prev_block_idx < seq.num_blocks:
+                    # This block should be full, so set its hash
+                    token_ids = seq.block(prev_block_idx)
+                    prefix = self.blocks[block_table[-2]].hash if len(block_table) > 1 else -1
+                    h = self.compute_hash(token_ids, prefix)
+                    last_block.update(h, token_ids)
+                    self.hash_to_block_id[h] = last_block.block_id
+            
+            # Now allocate a new block
             block_id = self.free_block_ids[0]
             self._allocate_block(block_id)
             block_table.append(block_id)
-        elif seq.caching_num_tokens % self.block_size == 0:
-            assert last_block.hash == -1
-            token_ids = seq.block(seq.num_blocks-1)
-            prefix = self.blocks[block_table[-2]].hash if len(block_table) > 1 else -1
-            h = self.compute_hash(token_ids, prefix)
-            last_block.update(h, token_ids)
-            self.hash_to_block_id[h] = last_block.block_id
-        else:
-            assert last_block.hash == -1
-    
+            
+        elif seq.cached_num_tokens % self.block_size == 0:
+            # Block is exactly full, set its hash if not already set
+            if last_block.hash == -1:
+                # Find the block index for the just-completed block
+                last_token_idx = seq.cached_num_tokens - 1  # Last token index (0-based)
+                block_idx = last_token_idx // self.block_size  # Block containing this token
+                
+                if block_idx < seq.num_blocks:
+                    token_ids = seq.block(block_idx)
+                    prefix = self.blocks[block_table[-2]].hash if len(block_table) > 1 else -1
+                    h = self.compute_hash(token_ids, prefix)
+                    last_block.update(h, token_ids)
+                    self.hash_to_block_id[h] = last_block.block_id
+        # For other cases (partial block), no action needed
+
 
 class AutoBlockManager(BlockManagerBase):
     BLOCK_MANAGER_MAPPING = {

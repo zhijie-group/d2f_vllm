@@ -59,7 +59,7 @@
             "program": "${workspaceFolder}/demo/test_dream_dvllm.py",
             "console": "integratedTerminal",
             "env": {
-                "CUDA_VISIBLE_DEVICES": "6,7"
+                "CUDA_VISIBLE_DEVICES": "1,2"
             }
         }
     ]

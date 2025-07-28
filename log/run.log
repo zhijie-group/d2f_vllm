@@ -1,27 +1,1447 @@
 Found LoRA config: r=32, alpha=32
-Loading base model:   0%|          | 0/4 [00:00<?, ?it/s]Loading base model:  25%|██▌       | 1/4 [00:00<00:01,  2.03it/s]Loading base model:  75%|███████▌  | 3/4 [00:01<00:00,  2.84it/s]Loading base model: 100%|██████████| 4/4 [00:01<00:00,  2.55it/s]Loading base model: 100%|██████████| 4/4 [00:01<00:00,  2.55it/s]
-Loading LoRA weights from /home/jyj/workspace-2/D2F/lora_weight
-Loading LoRA:   0%|          | 0/1 [00:00<?, ?it/s]Loading LoRA: 100%|██████████| 1/1 [00:00<00:00, 61.27it/s]
+Loading base model:   0%|          | 0/4 [00:00<?, ?it/s]Loading base model:  25%|██▌       | 1/4 [00:00<00:02,  1.33it/s]Loading base model:  50%|█████     | 2/4 [00:01<00:01,  1.24it/s]Loading base model:  75%|███████▌  | 3/4 [00:01<00:00,  1.91it/s]Loading base model: 100%|██████████| 4/4 [00:02<00:00,  1.54it/s]Loading base model: 100%|██████████| 4/4 [00:02<00:00,  1.52it/s]
+Loading LoRA weights from /data1/xck/ckpt/wx_dream_base/Decoder-ddt_test-20k
+Loading LoRA:   0%|          | 0/1 [00:00<?, ?it/s]Loading LoRA: 100%|██████████| 1/1 [00:00<00:00, 48.54it/s]
 LoRA weights applied to 112 layers and merged
-Generating:   0%|          | 0/5 [00:00<?, ?it/s]Generating:   0%|          | 0/5 [00:03<?, ?it/s, Prefill=42tok/s, Decode=0tok/s]Generating:   0%|          | 0/5 [00:05<?, ?it/s, Prefill=42tok/s, Decode=2tok/s]Generating:   0%|          | 0/5 [00:05<?, ?it/s, Prefill=42tok/s, Decode=184tok/s]Generating:   0%|          | 0/5 [00:06<?, ?it/s, Prefill=42tok/s, Decode=7tok/s]  Generating:   0%|          | 0/5 [00:08<?, ?it/s, Prefill=42tok/s, Decode=5tok/s]Generating:   0%|          | 0/5 [00:08<?, ?it/s, Prefill=42tok/s, Decode=72tok/s]Generating:   0%|          | 0/5 [00:08<?, ?it/s, Prefill=42tok/s, Decode=73tok/s]Generating:   0%|          | 0/5 [00:08<?, ?it/s, Prefill=42tok/s, Decode=73tok/s]Generating:   0%|          | 0/5 [00:08<?, ?it/s, Prefill=42tok/s, Decode=146tok/s]Generating:   0%|          | 0/5 [00:08<?, ?it/s, Prefill=42tok/s, Decode=72tok/s] Generating:   0%|          | 0/5 [00:08<?, ?it/s, Prefill=42tok/s, Decode=87tok/s]Generating:   0%|          | 0/5 [00:08<?, ?it/s, Prefill=42tok/s, Decode=88tok/s]Generating:   0%|          | 0/5 [00:08<?, ?it/s, Prefill=42tok/s, Decode=73tok/s]Generating:   0%|          | 0/5 [00:08<?, ?it/s, Prefill=42tok/s, Decode=73tok/s]Generating:   0%|          | 0/5 [00:08<?, ?it/s, Prefill=42tok/s, Decode=73tok/s]Generating:   0%|          | 0/5 [00:08<?, ?it/s, Prefill=42tok/s, Decode=72tok/s]Generating:   0%|          | 0/5 [00:08<?, ?it/s, Prefill=42tok/s, Decode=73tok/s]Generating:   0%|          | 0/5 [00:09<?, ?it/s, Prefill=42tok/s, Decode=73tok/s]Generating:   0%|          | 0/5 [00:09<?, ?it/s, Prefill=42tok/s, Decode=73tok/s]Generating:   0%|          | 0/5 [00:09<?, ?it/s, Prefill=42tok/s, Decode=88tok/s]Generating:   0%|          | 0/5 [00:09<?, ?it/s, Prefill=42tok/s, Decode=146tok/s]Generating:   0%|          | 0/5 [00:09<?, ?it/s, Prefill=42tok/s, Decode=116tok/s]Generating:   0%|          | 0/5 [00:09<?, ?it/s, Prefill=42tok/s, Decode=117tok/s]Generating:   0%|          | 0/5 [00:10<?, ?it/s, Prefill=42tok/s, Decode=4tok/s]  Generating:   0%|          | 0/5 [00:11<?, ?it/s, Prefill=42tok/s, Decode=4tok/s]Generating:   0%|          | 0/5 [00:13<?, ?it/s, Prefill=42tok/s, Decode=4tok/s]Generating:   0%|          | 0/5 [00:13<?, ?it/s, Prefill=42tok/s, Decode=117tok/s]Generating:   0%|          | 0/5 [00:14<?, ?it/s, Prefill=42tok/s, Decode=5tok/s]  Generating:   0%|          | 0/5 [00:14<?, ?it/s, Prefill=42tok/s, Decode=98tok/s][rank0]:W0727 13:51:32.198000 2655430 torch/_dynamo/convert_frame.py:964] [2/8] torch._dynamo hit config.recompile_limit (8)
-[rank0]:W0727 13:51:32.198000 2655430 torch/_dynamo/convert_frame.py:964] [2/8]    function: 'inner' (/data1/jyj/D2F/.venv/lib/python3.12/site-packages/torch/_dynamo/external_utils.py:68)
-[rank0]:W0727 13:51:32.198000 2655430 torch/_dynamo/convert_frame.py:964] [2/8]    last reason: 2/7: tensor 'args[0]' size mismatch at index 2. expected 352, actual 320
-[rank0]:W0727 13:51:32.198000 2655430 torch/_dynamo/convert_frame.py:964] [2/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
-[rank0]:W0727 13:51:32.198000 2655430 torch/_dynamo/convert_frame.py:964] [2/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
-Generating:   0%|          | 0/5 [00:14<?, ?it/s, Prefill=42tok/s, Decode=22tok/s]Generating:   0%|          | 0/5 [00:14<?, ?it/s, Prefill=42tok/s, Decode=48tok/s]Generating:   0%|          | 0/5 [00:15<?, ?it/s, Prefill=42tok/s, Decode=20tok/s]Generating:   0%|          | 0/5 [00:15<?, ?it/s, Prefill=42tok/s, Decode=16tok/s]Generating:   0%|          | 0/5 [00:15<?, ?it/s, Prefill=42tok/s, Decode=40tok/s]Generating:   0%|          | 0/5 [00:15<?, ?it/s, Prefill=42tok/s, Decode=39tok/s]Generating:   0%|          | 0/5 [00:15<?, ?it/s, Prefill=42tok/s, Decode=40tok/s]Generating:   0%|          | 0/5 [00:15<?, ?it/s, Prefill=42tok/s, Decode=40tok/s]Generating:   0%|          | 0/5 [00:16<?, ?it/s, Prefill=42tok/s, Decode=39tok/s]Generating:   0%|          | 0/5 [00:16<?, ?it/s, Prefill=42tok/s, Decode=39tok/s]Generating:   0%|          | 0/5 [00:16<?, ?it/s, Prefill=42tok/s, Decode=35tok/s]Generating:   0%|          | 0/5 [00:16<?, ?it/s, Prefill=42tok/s, Decode=39tok/s]Generating:   0%|          | 0/5 [00:16<?, ?it/s, Prefill=42tok/s, Decode=39tok/s]Generating:   0%|          | 0/5 [00:16<?, ?it/s, Prefill=42tok/s, Decode=47tok/s]Generating:   0%|          | 0/5 [00:16<?, ?it/s, Prefill=42tok/s, Decode=55tok/s]Generating:   0%|          | 0/5 [00:16<?, ?it/s, Prefill=42tok/s, Decode=39tok/s]Generating:   0%|          | 0/5 [00:17<?, ?it/s, Prefill=42tok/s, Decode=47tok/s]Generating:   0%|          | 0/5 [00:17<?, ?it/s, Prefill=42tok/s, Decode=55tok/s]Generating:   0%|          | 0/5 [00:17<?, ?it/s, Prefill=42tok/s, Decode=63tok/s]Generating:   0%|          | 0/5 [00:17<?, ?it/s, Prefill=42tok/s, Decode=40tok/s]Generating:   0%|          | 0/5 [00:17<?, ?it/s, Prefill=42tok/s, Decode=19tok/s]Generating:   0%|          | 0/5 [00:17<?, ?it/s, Prefill=42tok/s, Decode=46tok/s]Generating:   0%|          | 0/5 [00:18<?, ?it/s, Prefill=42tok/s, Decode=62tok/s]Generating:   0%|          | 0/5 [00:18<?, ?it/s, Prefill=42tok/s, Decode=46tok/s]Generating:   0%|          | 0/5 [00:18<?, ?it/s, Prefill=42tok/s, Decode=26tok/s]Generating:   0%|          | 0/5 [00:18<?, ?it/s, Prefill=42tok/s, Decode=19tok/s]Generating:   0%|          | 0/5 [00:19<?, ?it/s, Prefill=42tok/s, Decode=23tok/s]Generating:   0%|          | 0/5 [00:19<?, ?it/s, Prefill=42tok/s, Decode=47tok/s]Generating:   0%|          | 0/5 [00:19<?, ?it/s, Prefill=42tok/s, Decode=55tok/s]Generating:   0%|          | 0/5 [00:19<?, ?it/s, Prefill=42tok/s, Decode=55tok/s]Generating:   0%|          | 0/5 [00:19<?, ?it/s, Prefill=42tok/s, Decode=19tok/s]Generating:   0%|          | 0/5 [00:19<?, ?it/s, Prefill=42tok/s, Decode=40tok/s]Generating:   0%|          | 0/5 [00:20<?, ?it/s, Prefill=42tok/s, Decode=13tok/s]Generating:   0%|          | 0/5 [00:20<?, ?it/s, Prefill=42tok/s, Decode=36tok/s]Generating:   0%|          | 0/5 [00:20<?, ?it/s, Prefill=42tok/s, Decode=39tok/s]Generating:   0%|          | 0/5 [00:20<?, ?it/s, Prefill=42tok/s, Decode=39tok/s]Generating:   0%|          | 0/5 [00:20<?, ?it/s, Prefill=42tok/s, Decode=39tok/s]Generating:   0%|          | 0/5 [00:21<?, ?it/s, Prefill=42tok/s, Decode=55tok/s]Generating:   0%|          | 0/5 [00:21<?, ?it/s, Prefill=42tok/s, Decode=38tok/s]Generating:   0%|          | 0/5 [00:21<?, ?it/s, Prefill=42tok/s, Decode=39tok/s]Generating:   0%|          | 0/5 [00:21<?, ?it/s, Prefill=42tok/s, Decode=47tok/s]Generating:   0%|          | 0/5 [00:21<?, ?it/s, Prefill=42tok/s, Decode=47tok/s]Generating:   0%|          | 0/5 [00:21<?, ?it/s, Prefill=42tok/s, Decode=55tok/s]Generating:   0%|          | 0/5 [00:21<?, ?it/s, Prefill=42tok/s, Decode=54tok/s]Generating:   0%|          | 0/5 [00:21<?, ?it/s, Prefill=42tok/s, Decode=39tok/s]Generating:   0%|          | 0/5 [00:22<?, ?it/s, Prefill=42tok/s, Decode=22tok/s]Generating:   0%|          | 0/5 [00:22<?, ?it/s, Prefill=42tok/s, Decode=55tok/s]Generating:   0%|          | 0/5 [00:22<?, ?it/s, Prefill=42tok/s, Decode=55tok/s]Generating:   0%|          | 0/5 [00:22<?, ?it/s, Prefill=42tok/s, Decode=47tok/s]Generating:   0%|          | 0/5 [00:22<?, ?it/s, Prefill=42tok/s, Decode=19tok/s]Generating:   0%|          | 0/5 [00:23<?, ?it/s, Prefill=42tok/s, Decode=46tok/s]Generating:   0%|          | 0/5 [00:23<?, ?it/s, Prefill=42tok/s, Decode=94tok/s]Generating:   0%|          | 0/5 [00:23<?, ?it/s, Prefill=42tok/s, Decode=19tok/s]Generating:   0%|          | 0/5 [00:23<?, ?it/s, Prefill=42tok/s, Decode=47tok/s]Generating:   0%|          | 0/5 [00:23<?, ?it/s, Prefill=42tok/s, Decode=47tok/s]Generating:   0%|          | 0/5 [00:23<?, ?it/s, Prefill=42tok/s, Decode=95tok/s]Generating:   0%|          | 0/5 [00:24<?, ?it/s, Prefill=42tok/s, Decode=19tok/s]Generating:   0%|          | 0/5 [00:24<?, ?it/s, Prefill=42tok/s, Decode=32tok/s]Generating:   0%|          | 0/5 [00:24<?, ?it/s, Prefill=42tok/s, Decode=19tok/s]Generating:   0%|          | 0/5 [00:25<?, ?it/s, Prefill=42tok/s, Decode=19tok/s]Generating:   0%|          | 0/5 [00:25<?, ?it/s, Prefill=42tok/s, Decode=39tok/s]Generating:   0%|          | 0/5 [00:25<?, ?it/s, Prefill=42tok/s, Decode=39tok/s]Generating:   0%|          | 0/5 [00:25<?, ?it/s, Prefill=42tok/s, Decode=39tok/s]Generating:   0%|          | 0/5 [00:25<?, ?it/s, Prefill=42tok/s, Decode=39tok/s]Generating:   0%|          | 0/5 [00:25<?, ?it/s, Prefill=42tok/s, Decode=55tok/s]Generating:   0%|          | 0/5 [00:25<?, ?it/s, Prefill=42tok/s, Decode=53tok/s]Generating:   0%|          | 0/5 [00:26<?, ?it/s, Prefill=42tok/s, Decode=47tok/s]Generating:   0%|          | 0/5 [00:26<?, ?it/s, Prefill=42tok/s, Decode=39tok/s]Generating:   0%|          | 0/5 [00:26<?, ?it/s, Prefill=42tok/s, Decode=25tok/s]Generating:   0%|          | 0/5 [00:26<?, ?it/s, Prefill=42tok/s, Decode=55tok/s]Generating:   0%|          | 0/5 [00:26<?, ?it/s, Prefill=42tok/s, Decode=63tok/s]Generating:   0%|          | 0/5 [00:26<?, ?it/s, Prefill=42tok/s, Decode=55tok/s]Generating:   0%|          | 0/5 [00:27<?, ?it/s, Prefill=42tok/s, Decode=15tok/s]Generating:   0%|          | 0/5 [00:27<?, ?it/s, Prefill=42tok/s, Decode=15tok/s]Generating:   0%|          | 0/5 [00:27<?, ?it/s, Prefill=42tok/s, Decode=25tok/s]Generating:   0%|          | 0/5 [00:27<?, ?it/s, Prefill=42tok/s, Decode=39tok/s]Generating:   0%|          | 0/5 [00:28<?, ?it/s, Prefill=42tok/s, Decode=48tok/s]Generating:   0%|          | 0/5 [00:28<?, ?it/s, Prefill=42tok/s, Decode=40tok/s]Generating:   0%|          | 0/5 [00:28<?, ?it/s, Prefill=42tok/s, Decode=39tok/s]Generating:   0%|          | 0/5 [00:28<?, ?it/s, Prefill=42tok/s, Decode=47tok/s]Generating:   0%|          | 0/5 [00:28<?, ?it/s, Prefill=42tok/s, Decode=47tok/s]Generating:   0%|          | 0/5 [00:28<?, ?it/s, Prefill=42tok/s, Decode=63tok/s]Generating:   0%|          | 0/5 [00:29<?, ?it/s, Prefill=42tok/s, Decode=22tok/s]Generating:   0%|          | 0/5 [00:29<?, ?it/s, Prefill=42tok/s, Decode=19tok/s]Generating:   0%|          | 0/5 [00:29<?, ?it/s, Prefill=42tok/s, Decode=15tok/s]Generating:   0%|          | 0/5 [00:29<?, ?it/s, Prefill=42tok/s, Decode=22tok/s]Generating:   0%|          | 0/5 [00:30<?, ?it/s, Prefill=42tok/s, Decode=38tok/s]Generating:   0%|          | 0/5 [00:30<?, ?it/s, Prefill=42tok/s, Decode=38tok/s]Generating:   0%|          | 0/5 [00:30<?, ?it/s, Prefill=42tok/s, Decode=47tok/s]Generating:   0%|          | 0/5 [00:30<?, ?it/s, Prefill=42tok/s, Decode=47tok/s]Generating:   0%|          | 0/5 [00:30<?, ?it/s, Prefill=42tok/s, Decode=47tok/s]Generating:   0%|          | 0/5 [00:30<?, ?it/s, Prefill=42tok/s, Decode=39tok/s]Generating:   0%|          | 0/5 [00:31<?, ?it/s, Prefill=42tok/s, Decode=22tok/s]Generating:   0%|          | 0/5 [00:31<?, ?it/s, Prefill=42tok/s, Decode=54tok/s]Generating:   0%|          | 0/5 [00:31<?, ?it/s, Prefill=42tok/s, Decode=39tok/s]Generating:   0%|          | 0/5 [00:31<?, ?it/s, Prefill=42tok/s, Decode=54tok/s]Generating:   0%|          | 0/5 [00:31<?, ?it/s, Prefill=42tok/s, Decode=46tok/s]Generating:   0%|          | 0/5 [00:31<?, ?it/s, Prefill=42tok/s, Decode=54tok/s]Generating:   0%|          | 0/5 [00:31<?, ?it/s, Prefill=42tok/s, Decode=46tok/s]Generating:   0%|          | 0/5 [00:32<?, ?it/s, Prefill=42tok/s, Decode=34tok/s]Generating:   0%|          | 0/5 [00:32<?, ?it/s, Prefill=42tok/s, Decode=18tok/s]Generating:   0%|          | 0/5 [00:32<?, ?it/s, Prefill=42tok/s, Decode=15tok/s]Generating:   0%|          | 0/5 [00:32<?, ?it/s, Prefill=42tok/s, Decode=54tok/s]Generating:   0%|          | 0/5 [00:33<?, ?it/s, Prefill=42tok/s, Decode=60tok/s]Generating:   0%|          | 0/5 [00:33<?, ?it/s, Prefill=42tok/s, Decode=68tok/s]Generating:   0%|          | 0/5 [00:33<?, ?it/s, Prefill=42tok/s, Decode=46tok/s]Generating:   0%|          | 0/5 [00:33<?, ?it/s, Prefill=42tok/s, Decode=61tok/s]Generating:   0%|          | 0/5 [00:33<?, ?it/s, Prefill=42tok/s, Decode=83tok/s]Generating:   0%|          | 0/5 [00:33<?, ?it/s, Prefill=42tok/s, Decode=18tok/s]Generating:   0%|          | 0/5 [00:34<?, ?it/s, Prefill=42tok/s, Decode=19tok/s]Generating:   0%|          | 0/5 [00:34<?, ?it/s, Prefill=42tok/s, Decode=15tok/s]Generating:   0%|          | 0/5 [00:35<?, ?it/s, Prefill=42tok/s, Decode=46tok/s]Generating:   0%|          | 0/5 [00:35<?, ?it/s, Prefill=42tok/s, Decode=50tok/s]Generating:   0%|          | 0/5 [00:35<?, ?it/s, Prefill=42tok/s, Decode=58tok/s]Generating:   0%|          | 0/5 [00:35<?, ?it/s, Prefill=42tok/s, Decode=43tok/s]Generating:   0%|          | 0/5 [00:35<?, ?it/s, Prefill=42tok/s, Decode=18tok/s]Generating:   0%|          | 0/5 [00:36<?, ?it/s, Prefill=42tok/s, Decode=15tok/s]Generating:   0%|          | 0/5 [00:36<?, ?it/s, Prefill=42tok/s, Decode=39tok/s]Generating:   0%|          | 0/5 [00:36<?, ?it/s, Prefill=42tok/s, Decode=47tok/s]Generating:   0%|          | 0/5 [00:36<?, ?it/s, Prefill=42tok/s, Decode=50tok/s]Generating:   0%|          | 0/5 [00:36<?, ?it/s, Prefill=42tok/s, Decode=43tok/s]Generating:   0%|          | 0/5 [00:37<?, ?it/s, Prefill=42tok/s, Decode=18tok/s]Generating:   0%|          | 0/5 [00:37<?, ?it/s, Prefill=42tok/s, Decode=15tok/s]Generating:   0%|          | 0/5 [00:37<?, ?it/s, Prefill=42tok/s, Decode=45tok/s]Generating:   0%|          | 0/5 [00:37<?, ?it/s, Prefill=42tok/s, Decode=37tok/s]Generating:   0%|          | 0/5 [00:37<?, ?it/s, Prefill=42tok/s, Decode=45tok/s]Generating:   0%|          | 0/5 [00:37<?, ?it/s, Prefill=42tok/s, Decode=67tok/s]Generating:   0%|          | 0/5 [00:38<?, ?it/s, Prefill=42tok/s, Decode=52tok/s]Generating:   0%|          | 0/5 [00:38<?, ?it/s, Prefill=42tok/s, Decode=52tok/s]Generating:   0%|          | 0/5 [00:38<?, ?it/s, Prefill=42tok/s, Decode=38tok/s]Generating:   0%|          | 0/5 [00:38<?, ?it/s, Prefill=42tok/s, Decode=15tok/s]Generating:   0%|          | 0/5 [00:38<?, ?it/s, Prefill=42tok/s, Decode=45tok/s]Generating:   0%|          | 0/5 [00:39<?, ?it/s, Prefill=42tok/s, Decode=44tok/s]Generating:   0%|          | 0/5 [00:39<?, ?it/s, Prefill=42tok/s, Decode=44tok/s]Generating:   0%|          | 0/5 [00:39<?, ?it/s, Prefill=42tok/s, Decode=15tok/s]Generating:   0%|          | 0/5 [00:39<?, ?it/s, Prefill=42tok/s, Decode=40tok/s]Generating:   0%|          | 0/5 [00:40<?, ?it/s, Prefill=42tok/s, Decode=37tok/s]Generating:   0%|          | 0/5 [00:40<?, ?it/s, Prefill=42tok/s, Decode=44tok/s]Generating:   0%|          | 0/5 [00:40<?, ?it/s, Prefill=42tok/s, Decode=44tok/s]Generating:   0%|          | 0/5 [00:40<?, ?it/s, Prefill=42tok/s, Decode=74tok/s]Generating:   0%|          | 0/5 [00:40<?, ?it/s, Prefill=42tok/s, Decode=15tok/s]Generating:   0%|          | 0/5 [00:41<?, ?it/s, Prefill=42tok/s, Decode=21tok/s]Generating:   0%|          | 0/5 [00:41<?, ?it/s, Prefill=42tok/s, Decode=52tok/s]Generating:   0%|          | 0/5 [00:41<?, ?it/s, Prefill=42tok/s, Decode=52tok/s][rank0]: Traceback (most recent call last):
-[rank0]:   File "/data1/jyj/D2F/demo/test_dream_dvllm.py", line 42, in <module>
-[rank0]:     outputs = llm.generate(prompts, sampling_params)
-[rank0]:               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-[rank0]:   File "/data1/jyj/D2F/d2f_vllm/engine/llm_engine.py", line 88, in generate
-[rank0]:     output, num_tokens, is_prefill = self.step()
-[rank0]:                                      ^^^^^^^^^^^
-[rank0]:   File "/data1/jyj/D2F/d2f_vllm/engine/llm_engine.py", line 59, in step
-[rank0]:     seqs, is_prefill = self.scheduler.schedule()
-[rank0]:                        ^^^^^^^^^^^^^^^^^^^^^^^^^
-[rank0]:   File "/data1/jyj/D2F/d2f_vllm/engine/scheduler.py", line 150, in schedule
-[rank0]:     self.block_manager.may_append(seq)
-[rank0]:   File "/data1/jyj/D2F/d2f_vllm/engine/block_manager.py", line 136, in may_append
-[rank0]:     assert last_block.hash != -1
-[rank0]:            ^^^^^^^^^^^^^^^^^^^^^
-[rank0]: AssertionError
-Generating:   0%|          | 0/5 [00:42<?, ?it/s, Prefill=42tok/s, Decode=52tok/s]
+Generating:   0%|          | 0/5 [00:00<?, ?it/s]Generating:   0%|          | 0/5 [00:01<?, ?it/s, Prefill=82tok/s, Decode=0tok/s]Generating:   0%|          | 0/5 [00:03<?, ?it/s, Prefill=82tok/s, Decode=3tok/s]Generating:   0%|          | 0/5 [00:03<?, ?it/s, Prefill=82tok/s, Decode=242tok/s]Generating:   0%|          | 0/5 [00:03<?, ?it/s, Prefill=82tok/s, Decode=7tok/s]  Generating:   0%|          | 0/5 [00:04<?, ?it/s, Prefill=82tok/s, Decode=11tok/s]Generating:   0%|          | 0/5 [00:04<?, ?it/s, Prefill=82tok/s, Decode=69tok/s]Generating:   0%|          | 0/5 [00:04<?, ?it/s, Prefill=82tok/s, Decode=83tok/s]Generating:   0%|          | 0/5 [00:04<?, ?it/s, Prefill=82tok/s, Decode=155tok/s]Generating:   0%|          | 0/5 [00:04<?, ?it/s, Prefill=82tok/s, Decode=94tok/s] Generating:   0%|          | 0/5 [00:04<?, ?it/s, Prefill=82tok/s, Decode=95tok/s]Generating:   0%|          | 0/5 [00:04<?, ?it/s, Prefill=82tok/s, Decode=93tok/s]Generating:   0%|          | 0/5 [00:04<?, ?it/s, Prefill=82tok/s, Decode=95tok/s]Generating:   0%|          | 0/5 [00:05<?, ?it/s, Prefill=82tok/s, Decode=110tok/s]Generating:   0%|          | 0/5 [00:05<?, ?it/s, Prefill=82tok/s, Decode=79tok/s] Generating:   0%|          | 0/5 [00:05<?, ?it/s, Prefill=82tok/s, Decode=116tok/s]Generating:   0%|          | 0/5 [00:05<?, ?it/s, Prefill=82tok/s, Decode=90tok/s] Generating:   0%|          | 0/5 [00:05<?, ?it/s, Prefill=82tok/s, Decode=86tok/s]Generating:   0%|          | 0/5 [00:05<?, ?it/s, Prefill=82tok/s, Decode=63tok/s]Generating:   0%|          | 0/5 [00:05<?, ?it/s, Prefill=82tok/s, Decode=111tok/s]Generating:   0%|          | 0/5 [00:05<?, ?it/s, Prefill=82tok/s, Decode=126tok/s]Generating:   0%|          | 0/5 [00:05<?, ?it/s, Prefill=82tok/s, Decode=142tok/s]Generating:   0%|          | 0/5 [00:06<?, ?it/s, Prefill=82tok/s, Decode=11tok/s] Generating:   0%|          | 0/5 [00:06<?, ?it/s, Prefill=82tok/s, Decode=11tok/s]Generating:   0%|          | 0/5 [00:06<?, ?it/s, Prefill=82tok/s, Decode=79tok/s]Generating:   0%|          | 0/5 [00:07<?, ?it/s, Prefill=82tok/s, Decode=11tok/s]Generating:   0%|          | 0/5 [00:07<?, ?it/s, Prefill=82tok/s, Decode=79tok/s]Generating:   0%|          | 0/5 [00:07<?, ?it/s, Prefill=82tok/s, Decode=142tok/s]Generating:   0%|          | 0/5 [00:07<?, ?it/s, Prefill=82tok/s, Decode=95tok/s] Generating:   0%|          | 0/5 [00:07<?, ?it/s, Prefill=82tok/s, Decode=110tok/s]Generating:   0%|          | 0/5 [00:07<?, ?it/s, Prefill=82tok/s, Decode=126tok/s]Generating:   0%|          | 0/5 [00:09<?, ?it/s, Prefill=82tok/s, Decode=4tok/s]  Generating:   0%|          | 0/5 [00:09<?, ?it/s, Prefill=82tok/s, Decode=83tok/s][rank0]:W0728 16:08:36.383000 3815010 torch/_dynamo/convert_frame.py:964] [2/8] torch._dynamo hit config.recompile_limit (8)
+[rank0]:W0728 16:08:36.383000 3815010 torch/_dynamo/convert_frame.py:964] [2/8]    function: 'inner' (/data1/xck/D2F/.venv/lib/python3.12/site-packages/torch/_dynamo/external_utils.py:68)
+[rank0]:W0728 16:08:36.383000 3815010 torch/_dynamo/convert_frame.py:964] [2/8]    last reason: 2/7: tensor 'args[1]' size mismatch at index 2. expected 613, actual 645
+[rank0]:W0728 16:08:36.383000 3815010 torch/_dynamo/convert_frame.py:964] [2/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+[rank0]:W0728 16:08:36.383000 3815010 torch/_dynamo/convert_frame.py:964] [2/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+Generating:   0%|          | 0/5 [00:10<?, ?it/s, Prefill=82tok/s, Decode=26tok/s]Generating:   0%|          | 0/5 [00:10<?, ?it/s, Prefill=82tok/s, Decode=33tok/s]Generating:   0%|          | 0/5 [00:10<?, ?it/s, Prefill=82tok/s, Decode=32tok/s]Generating:   0%|          | 0/5 [00:10<?, ?it/s, Prefill=82tok/s, Decode=34tok/s]Generating:   0%|          | 0/5 [00:10<?, ?it/s, Prefill=82tok/s, Decode=47tok/s]Generating:   0%|          | 0/5 [00:11<?, ?it/s, Prefill=82tok/s, Decode=34tok/s]Generating:   0%|          | 0/5 [00:11<?, ?it/s, Prefill=82tok/s, Decode=34tok/s]Generating:   0%|          | 0/5 [00:11<?, ?it/s, Prefill=82tok/s, Decode=34tok/s]Generating:   0%|          | 0/5 [00:11<?, ?it/s, Prefill=82tok/s, Decode=46tok/s]Generating:   0%|          | 0/5 [00:11<?, ?it/s, Prefill=82tok/s, Decode=41tok/s]Generating:   0%|          | 0/5 [00:11<?, ?it/s, Prefill=82tok/s, Decode=48tok/s]Generating:   0%|          | 0/5 [00:11<?, ?it/s, Prefill=82tok/s, Decode=41tok/s]Generating:   0%|          | 0/5 [00:12<?, ?it/s, Prefill=82tok/s, Decode=48tok/s]Generating:   0%|          | 0/5 [00:12<?, ?it/s, Prefill=82tok/s, Decode=17tok/s]Generating:   0%|          | 0/5 [00:12<?, ?it/s, Prefill=82tok/s, Decode=20tok/s]Generating:   0%|          | 0/5 [00:13<?, ?it/s, Prefill=82tok/s, Decode=53tok/s]Generating:   0%|          | 0/5 [00:13<?, ?it/s, Prefill=82tok/s, Decode=12tok/s]Generating:   0%|          | 0/5 [00:13<?, ?it/s, Prefill=82tok/s, Decode=15tok/s]Generating:   0%|          | 0/5 [00:13<?, ?it/s, Prefill=82tok/s, Decode=39tok/s]Generating:   0%|          | 0/5 [00:14<?, ?it/s, Prefill=82tok/s, Decode=46tok/s]Generating:   0%|          | 0/5 [00:14<?, ?it/s, Prefill=82tok/s, Decode=17tok/s]Generating:   0%|          | 0/5 [00:14<?, ?it/s, Prefill=82tok/s, Decode=40tok/s]Generating:   0%|          | 0/5 [00:15<?, ?it/s, Prefill=82tok/s, Decode=12tok/s]Generating:   0%|          | 0/5 [00:15<?, ?it/s, Prefill=82tok/s, Decode=17tok/s]Generating:   0%|          | 0/5 [00:15<?, ?it/s, Prefill=82tok/s, Decode=34tok/s]Generating:   0%|          | 0/5 [00:15<?, ?it/s, Prefill=82tok/s, Decode=34tok/s]Generating:   0%|          | 0/5 [00:15<?, ?it/s, Prefill=82tok/s, Decode=42tok/s]Generating:   0%|          | 0/5 [00:16<?, ?it/s, Prefill=82tok/s, Decode=49tok/s]Generating:   0%|          | 0/5 [00:16<?, ?it/s, Prefill=82tok/s, Decode=35tok/s]Generating:   0%|          | 0/5 [00:16<?, ?it/s, Prefill=82tok/s, Decode=35tok/s]Generating:   0%|          | 0/5 [00:16<?, ?it/s, Prefill=82tok/s, Decode=35tok/s]Generating:   0%|          | 0/5 [00:16<?, ?it/s, Prefill=82tok/s, Decode=42tok/s]Generating:   0%|          | 0/5 [00:16<?, ?it/s, Prefill=82tok/s, Decode=35tok/s]Generating:   0%|          | 0/5 [00:16<?, ?it/s, Prefill=82tok/s, Decode=34tok/s]Generating:   0%|          | 0/5 [00:17<?, ?it/s, Prefill=82tok/s, Decode=42tok/s]Generating:   0%|          | 0/5 [00:17<?, ?it/s, Prefill=82tok/s, Decode=48tok/s]Generating:   0%|          | 0/5 [00:17<?, ?it/s, Prefill=82tok/s, Decode=63tok/s]Generating:   0%|          | 0/5 [00:17<?, ?it/s, Prefill=82tok/s, Decode=63tok/s]Generating:   0%|          | 0/5 [00:17<?, ?it/s, Prefill=82tok/s, Decode=42tok/s]Generating:   0%|          | 0/5 [00:17<?, ?it/s, Prefill=82tok/s, Decode=13tok/s]Generating:   0%|          | 0/5 [00:18<?, ?it/s, Prefill=82tok/s, Decode=12tok/s]Generating:   0%|          | 0/5 [00:18<?, ?it/s, Prefill=82tok/s, Decode=15tok/s]Generating:   0%|          | 0/5 [00:18<?, ?it/s, Prefill=82tok/s, Decode=42tok/s]Generating:   0%|          | 0/5 [00:19<?, ?it/s, Prefill=82tok/s, Decode=42tok/s]Generating:   0%|          | 0/5 [00:19<?, ?it/s, Prefill=82tok/s, Decode=15tok/s]Generating:   0%|          | 0/5 [00:19<?, ?it/s, Prefill=82tok/s, Decode=12tok/s]Generating:   0%|          | 0/5 [00:20<?, ?it/s, Prefill=82tok/s, Decode=48tok/s]Generating:   0%|          | 0/5 [00:20<?, ?it/s, Prefill=82tok/s, Decode=17tok/s]Generating:   0%|          | 0/5 [00:20<?, ?it/s, Prefill=82tok/s, Decode=17tok/s]Generating:   0%|          | 0/5 [00:21<?, ?it/s, Prefill=82tok/s, Decode=14tok/s]Generating:   0%|          | 0/5 [00:21<?, ?it/s, Prefill=82tok/s, Decode=31tok/s]Generating:   0%|          | 0/5 [00:21<?, ?it/s, Prefill=82tok/s, Decode=32tok/s]Generating:   0%|          | 0/5 [00:21<?, ?it/s, Prefill=82tok/s, Decode=33tok/s]Generating:   0%|          | 0/5 [00:21<?, ?it/s, Prefill=82tok/s, Decode=34tok/s]Generating:   0%|          | 0/5 [00:22<?, ?it/s, Prefill=82tok/s, Decode=34tok/s]Generating:   0%|          | 0/5 [00:22<?, ?it/s, Prefill=82tok/s, Decode=34tok/s]Generating:   0%|          | 0/5 [00:22<?, ?it/s, Prefill=82tok/s, Decode=34tok/s]Generating:   0%|          | 0/5 [00:22<?, ?it/s, Prefill=82tok/s, Decode=34tok/s]Generating:   0%|          | 0/5 [00:22<?, ?it/s, Prefill=82tok/s, Decode=34tok/s]Generating:   0%|          | 0/5 [00:22<?, ?it/s, Prefill=82tok/s, Decode=34tok/s]Generating:   0%|          | 0/5 [00:22<?, ?it/s, Prefill=82tok/s, Decode=34tok/s]Generating:   0%|          | 0/5 [00:23<?, ?it/s, Prefill=82tok/s, Decode=41tok/s]Generating:   0%|          | 0/5 [00:23<?, ?it/s, Prefill=82tok/s, Decode=34tok/s]Generating:   0%|          | 0/5 [00:23<?, ?it/s, Prefill=82tok/s, Decode=76tok/s]Generating:   0%|          | 0/5 [00:23<?, ?it/s, Prefill=82tok/s, Decode=69tok/s]Generating:   0%|          | 0/5 [00:23<?, ?it/s, Prefill=82tok/s, Decode=15tok/s]Generating:   0%|          | 0/5 [00:24<?, ?it/s, Prefill=82tok/s, Decode=12tok/s]Generating:   0%|          | 0/5 [00:24<?, ?it/s, Prefill=82tok/s, Decode=12tok/s]Generating:   0%|          | 0/5 [00:25<?, ?it/s, Prefill=82tok/s, Decode=12tok/s]Generating:   0%|          | 0/5 [00:25<?, ?it/s, Prefill=82tok/s, Decode=41tok/s]Generating:   0%|          | 0/5 [00:25<?, ?it/s, Prefill=82tok/s, Decode=47tok/s]Generating:   0%|          | 0/5 [00:25<?, ?it/s, Prefill=82tok/s, Decode=48tok/s]Generating:   0%|          | 0/5 [00:25<?, ?it/s, Prefill=82tok/s, Decode=48tok/s]Generating:   0%|          | 0/5 [00:26<?, ?it/s, Prefill=82tok/s, Decode=27tok/s]Generating:   0%|          | 0/5 [00:26<?, ?it/s, Prefill=82tok/s, Decode=22tok/s]Generating:   0%|          | 0/5 [00:26<?, ?it/s, Prefill=82tok/s, Decode=47tok/s]Generating:   0%|          | 0/5 [00:27<?, ?it/s, Prefill=82tok/s, Decode=34tok/s]Generating:   0%|          | 0/5 [00:27<?, ?it/s, Prefill=82tok/s, Decode=33tok/s]Generating:   0%|          | 0/5 [00:27<?, ?it/s, Prefill=82tok/s, Decode=40tok/s]Generating:   0%|          | 0/5 [00:27<?, ?it/s, Prefill=82tok/s, Decode=33tok/s]Generating:   0%|          | 0/5 [00:27<?, ?it/s, Prefill=82tok/s, Decode=33tok/s]Generating:   0%|          | 0/5 [00:27<?, ?it/s, Prefill=82tok/s, Decode=34tok/s]Generating:   0%|          | 0/5 [00:27<?, ?it/s, Prefill=82tok/s, Decode=40tok/s]Generating:   0%|          | 0/5 [00:28<?, ?it/s, Prefill=82tok/s, Decode=34tok/s]Generating:   0%|          | 0/5 [00:28<?, ?it/s, Prefill=82tok/s, Decode=34tok/s]Generating:   0%|          | 0/5 [00:28<?, ?it/s, Prefill=82tok/s, Decode=40tok/s]Generating:   0%|          | 0/5 [00:28<?, ?it/s, Prefill=82tok/s, Decode=40tok/s]Generating:   0%|          | 0/5 [00:28<?, ?it/s, Prefill=82tok/s, Decode=46tok/s]Generating:   0%|          | 0/5 [00:28<?, ?it/s, Prefill=82tok/s, Decode=54tok/s]Generating:   0%|          | 0/5 [00:28<?, ?it/s, Prefill=82tok/s, Decode=65tok/s]Generating:   0%|          | 0/5 [00:29<?, ?it/s, Prefill=82tok/s, Decode=19tok/s]Generating:   0%|          | 0/5 [00:29<?, ?it/s, Prefill=82tok/s, Decode=12tok/s]Generating:   0%|          | 0/5 [00:30<?, ?it/s, Prefill=82tok/s, Decode=14tok/s]Generating:   0%|          | 0/5 [00:30<?, ?it/s, Prefill=82tok/s, Decode=33tok/s]Generating:   0%|          | 0/5 [00:30<?, ?it/s, Prefill=82tok/s, Decode=40tok/s]Generating:   0%|          | 0/5 [00:30<?, ?it/s, Prefill=82tok/s, Decode=40tok/s]Generating:   0%|          | 0/5 [00:30<?, ?it/s, Prefill=82tok/s, Decode=53tok/s]Generating:   0%|          | 0/5 [00:30<?, ?it/s, Prefill=82tok/s, Decode=47tok/s]Generating:   0%|          | 0/5 [00:31<?, ?it/s, Prefill=82tok/s, Decode=47tok/s]Generating:   0%|          | 0/5 [00:31<?, ?it/s, Prefill=82tok/s, Decode=12tok/s]Generating:   0%|          | 0/5 [00:31<?, ?it/s, Prefill=82tok/s, Decode=26tok/s]Generating:   0%|          | 0/5 [00:32<?, ?it/s, Prefill=82tok/s, Decode=46tok/s]Generating:   0%|          | 0/5 [00:32<?, ?it/s, Prefill=82tok/s, Decode=53tok/s]Generating:   0%|          | 0/5 [00:32<?, ?it/s, Prefill=82tok/s, Decode=33tok/s]Generating:   0%|          | 0/5 [00:32<?, ?it/s, Prefill=82tok/s, Decode=33tok/s]Generating:   0%|          | 0/5 [00:32<?, ?it/s, Prefill=82tok/s, Decode=40tok/s]Generating:   0%|          | 0/5 [00:32<?, ?it/s, Prefill=82tok/s, Decode=40tok/s]Generating:   0%|          | 0/5 [00:32<?, ?it/s, Prefill=82tok/s, Decode=33tok/s]Generating:   0%|          | 0/5 [00:33<?, ?it/s, Prefill=82tok/s, Decode=33tok/s]Generating:   0%|          | 0/5 [00:33<?, ?it/s, Prefill=82tok/s, Decode=33tok/s]Generating:   0%|          | 0/5 [00:33<?, ?it/s, Prefill=82tok/s, Decode=32tok/s]Generating:   0%|          | 0/5 [00:33<?, ?it/s, Prefill=82tok/s, Decode=53tok/s]Generating:   0%|          | 0/5 [00:33<?, ?it/s, Prefill=82tok/s, Decode=65tok/s]Generating:   0%|          | 0/5 [00:34<?, ?it/s, Prefill=82tok/s, Decode=17tok/s]Generating:   0%|          | 0/5 [00:34<?, ?it/s, Prefill=82tok/s, Decode=39tok/s]Generating:   0%|          | 0/5 [00:34<?, ?it/s, Prefill=82tok/s, Decode=19tok/s]Generating:   0%|          | 0/5 [00:34<?, ?it/s, Prefill=82tok/s, Decode=32tok/s]Generating:   0%|          | 0/5 [00:34<?, ?it/s, Prefill=82tok/s, Decode=46tok/s]Generating:   0%|          | 0/5 [00:35<?, ?it/s, Prefill=82tok/s, Decode=39tok/s]Generating:   0%|          | 0/5 [00:35<?, ?it/s, Prefill=82tok/s, Decode=19tok/s]Generating:   0%|          | 0/5 [00:35<?, ?it/s, Prefill=82tok/s, Decode=45tok/s]Generating:   0%|          | 0/5 [00:36<?, ?it/s, Prefill=82tok/s, Decode=27tok/s]Generating:   0%|          | 0/5 [00:36<?, ?it/s, Prefill=82tok/s, Decode=12tok/s]Generating:   0%|          | 0/5 [00:37<?, ?it/s, Prefill=82tok/s, Decode=38tok/s]Generating:   0%|          | 0/5 [00:37<?, ?it/s, Prefill=82tok/s, Decode=37tok/s]Generating:   0%|          | 0/5 [00:37<?, ?it/s, Prefill=82tok/s, Decode=38tok/s]Generating:   0%|          | 0/5 [00:37<?, ?it/s, Prefill=82tok/s, Decode=31tok/s]Generating:   0%|          | 0/5 [00:37<?, ?it/s, Prefill=82tok/s, Decode=36tok/s]Generating:   0%|          | 0/5 [00:38<?, ?it/s, Prefill=82tok/s, Decode=45tok/s]Generating:   0%|          | 0/5 [00:38<?, ?it/s, Prefill=82tok/s, Decode=12tok/s]Generating:   0%|          | 0/5 [00:38<?, ?it/s, Prefill=82tok/s, Decode=44tok/s]Generating:   0%|          | 0/5 [00:38<?, ?it/s, Prefill=82tok/s, Decode=38tok/s]Generating:   0%|          | 0/5 [00:38<?, ?it/s, Prefill=82tok/s, Decode=44tok/s]Generating:   0%|          | 0/5 [00:39<?, ?it/s, Prefill=82tok/s, Decode=38tok/s]Generating:   0%|          | 0/5 [00:39<?, ?it/s, Prefill=82tok/s, Decode=32tok/s]Generating:   0%|          | 0/5 [00:39<?, ?it/s, Prefill=82tok/s, Decode=22tok/s]Generating:   0%|          | 0/5 [00:39<?, ?it/s, Prefill=82tok/s, Decode=45tok/s]Generating:   0%|          | 0/5 [00:39<?, ?it/s, Prefill=82tok/s, Decode=45tok/s]Generating:   0%|          | 0/5 [00:40<?, ?it/s, Prefill=82tok/s, Decode=89tok/s]Generating:   0%|          | 0/5 [00:40<?, ?it/s, Prefill=82tok/s, Decode=28tok/s]Generating:   0%|          | 0/5 [00:40<?, ?it/s, Prefill=82tok/s, Decode=40tok/s]Generating:   0%|          | 0/5 [00:41<?, ?it/s, Prefill=82tok/s, Decode=34tok/s]Generating:   0%|          | 0/5 [00:41<?, ?it/s, Prefill=82tok/s, Decode=20tok/s]Generating:   0%|          | 0/5 [00:41<?, ?it/s, Prefill=82tok/s, Decode=26tok/s]Generating:   0%|          | 0/5 [00:41<?, ?it/s, Prefill=82tok/s, Decode=36tok/s]Generating:   0%|          | 0/5 [00:42<?, ?it/s, Prefill=82tok/s, Decode=30tok/s]Generating:   0%|          | 0/5 [00:42<?, ?it/s, Prefill=82tok/s, Decode=33tok/s]Generating:   0%|          | 0/5 [00:42<?, ?it/s, Prefill=82tok/s, Decode=14tok/s]Generating:   0%|          | 0/5 [00:43<?, ?it/s, Prefill=82tok/s, Decode=33tok/s]Generating:   0%|          | 0/5 [00:43<?, ?it/s, Prefill=82tok/s, Decode=31tok/s]Generating:   0%|          | 0/5 [00:44<?, ?it/s, Prefill=82tok/s, Decode=16tok/s]Generating:   0%|          | 0/5 [00:44<?, ?it/s, Prefill=82tok/s, Decode=21tok/s]Generating:   0%|          | 0/5 [00:44<?, ?it/s, Prefill=82tok/s, Decode=28tok/s]Generating:   0%|          | 0/5 [00:44<?, ?it/s, Prefill=82tok/s, Decode=19tok/s]Generating:   0%|          | 0/5 [00:45<?, ?it/s, Prefill=82tok/s, Decode=19tok/s]Generating:   0%|          | 0/5 [00:45<?, ?it/s, Prefill=82tok/s, Decode=22tok/s]Generating:   0%|          | 0/5 [00:45<?, ?it/s, Prefill=82tok/s, Decode=21tok/s]Generating:   0%|          | 0/5 [00:45<?, ?it/s, Prefill=82tok/s, Decode=21tok/s]Generating:   0%|          | 0/5 [00:46<?, ?it/s, Prefill=82tok/s, Decode=20tok/s]Generating:   0%|          | 0/5 [00:46<?, ?it/s, Prefill=82tok/s, Decode=16tok/s]Generating:   0%|          | 0/5 [00:46<?, ?it/s, Prefill=82tok/s, Decode=23tok/s]Generating:   0%|          | 0/5 [00:47<?, ?it/s, Prefill=82tok/s, Decode=29tok/s]Generating:   0%|          | 0/5 [00:47<?, ?it/s, Prefill=82tok/s, Decode=12tok/s]Generating:   0%|          | 0/5 [00:48<?, ?it/s, Prefill=82tok/s, Decode=12tok/s]Generating:   0%|          | 0/5 [00:48<?, ?it/s, Prefill=82tok/s, Decode=26tok/s]Generating:   0%|          | 0/5 [00:48<?, ?it/s, Prefill=82tok/s, Decode=16tok/s]Generating:   0%|          | 0/5 [00:49<?, ?it/s, Prefill=82tok/s, Decode=12tok/s]Generating:   0%|          | 0/5 [00:49<?, ?it/s, Prefill=82tok/s, Decode=19tok/s]Generating:   0%|          | 0/5 [00:50<?, ?it/s, Prefill=82tok/s, Decode=16tok/s]Generating:   0%|          | 0/5 [00:50<?, ?it/s, Prefill=82tok/s, Decode=26tok/s]Generating:   0%|          | 0/5 [00:50<?, ?it/s, Prefill=82tok/s, Decode=16tok/s]Generating:  20%|██        | 1/5 [00:50<03:22, 50.73s/it, Prefill=82tok/s, Decode=16tok/s]Generating:  20%|██        | 1/5 [00:51<03:22, 50.73s/it, Prefill=82tok/s, Decode=7tok/s] Generating:  20%|██        | 1/5 [00:51<03:22, 50.73s/it, Prefill=82tok/s, Decode=14tok/s]Generating:  20%|██        | 1/5 [00:51<03:22, 50.73s/it, Prefill=82tok/s, Decode=14tok/s]Generating:  20%|██        | 1/5 [00:52<03:22, 50.73s/it, Prefill=82tok/s, Decode=14tok/s]Generating:  20%|██        | 1/5 [00:52<03:22, 50.73s/it, Prefill=82tok/s, Decode=14tok/s]Generating:  20%|██        | 1/5 [00:52<03:22, 50.73s/it, Prefill=82tok/s, Decode=14tok/s]Generating:  20%|██        | 1/5 [00:52<03:22, 50.73s/it, Prefill=82tok/s, Decode=21tok/s]Generating:  20%|██        | 1/5 [00:53<03:22, 50.73s/it, Prefill=82tok/s, Decode=13tok/s]Generating:  20%|██        | 1/5 [00:53<03:22, 50.73s/it, Prefill=82tok/s, Decode=13tok/s]Generating:  20%|██        | 1/5 [00:53<03:22, 50.73s/it, Prefill=82tok/s, Decode=13tok/s]Generating:  20%|██        | 1/5 [00:54<03:22, 50.73s/it, Prefill=82tok/s, Decode=13tok/s]Generating:  20%|██        | 1/5 [00:54<03:22, 50.73s/it, Prefill=82tok/s, Decode=14tok/s]Generating:  40%|████      | 2/5 [00:54<01:09, 23.05s/it, Prefill=82tok/s, Decode=14tok/s]Generating:  40%|████      | 2/5 [00:54<01:09, 23.05s/it, Prefill=82tok/s, Decode=6tok/s] Generating:  40%|████      | 2/5 [00:55<01:09, 23.05s/it, Prefill=82tok/s, Decode=14tok/s]Generating:  60%|██████    | 3/5 [00:55<00:25, 12.83s/it, Prefill=82tok/s, Decode=14tok/s]Generating:  60%|██████    | 3/5 [00:55<00:25, 12.83s/it, Prefill=82tok/s, Decode=4tok/s] Generating:  60%|██████    | 3/5 [00:55<00:25, 12.83s/it, Prefill=82tok/s, Decode=10tok/s]Generating:  80%|████████  | 4/5 [00:55<00:08,  8.03s/it, Prefill=82tok/s, Decode=10tok/s]Generating:  80%|████████  | 4/5 [00:56<00:08,  8.03s/it, Prefill=82tok/s, Decode=2tok/s] Generating:  80%|████████  | 4/5 [00:56<00:08,  8.03s/it, Prefill=82tok/s, Decode=5tok/s]Generating:  80%|████████  | 4/5 [00:56<00:08,  8.03s/it, Prefill=82tok/s, Decode=5tok/s]Generating:  80%|████████  | 4/5 [00:56<00:08,  8.03s/it, Prefill=82tok/s, Decode=5tok/s]Generating:  80%|████████  | 4/5 [00:56<00:08,  8.03s/it, Prefill=82tok/s, Decode=5tok/s]Generating:  80%|████████  | 4/5 [00:57<00:08,  8.03s/it, Prefill=82tok/s, Decode=5tok/s]Generating:  80%|████████  | 4/5 [00:57<00:08,  8.03s/it, Prefill=82tok/s, Decode=5tok/s]Generating: 100%|██████████| 5/5 [00:57<00:00,  5.69s/it, Prefill=82tok/s, Decode=5tok/s]Generating: 100%|██████████| 5/5 [00:57<00:00, 11.45s/it, Prefill=82tok/s, Decode=5tok/s]
+[{'text': "政策措施's a simplified explanation of how it works:\n"
+          '\n'
+          '1. **Model Architecture**: Diffusion decoding is often used in '
+          'diffusion models, which are a type of generative model that uses a '
+          'series of transformations to transform a noise distribution into a '
+          'target distribution. The target distribution is typically the '
+          'distribution of the training data.\n'
+          '\n'
+          '2. **Noise Injection**: The process starts by injecting noise into '
+          'the input data. The noise is typically Gaussian noise, and the '
+          'strength of the noise is controlled by a parameter called the '
+          '"diffusion" parameter. As the diffusion parameter increases, the '
+          'strength of the noise increases.\n'
+          '\n'
+          '3. **Transformation Steps**: The model then applies a series of '
+          'transformations to the noisy data. These transformations are '
+          'designed to remove the noise and reconstruct the original data. '
+          'Each transformation is typically a linear transformation, followed '
+          'by a non-linear transformation such as an activation function.\n'
+          '\n'
+          '4. **Conditioning**: At each transformation step, the model is '
+          'conditioned on the previous transformation. This means that the '
+          'model takes into account the current state of the data when '
+          'applying the next transformation.\n'
+          '\n'
+          '5. **Decoding**: At the end of the process, the model has applied '
+          'the desired number of transformations, the output is a noisy '
+          'version of the original data.\n'
+          '\n'
+          '6. **Reconstruction**: To reconstruct the original data',
+  'token_ids': [114968,
+                594,
+                264,
+                43799,
+                16148,
+                315,
+                1246,
+                432,
+                4278,
+                1447,
+                16,
+                13,
+                3070,
+                1712,
+                37843,
+                95518,
+                28369,
+                7560,
+                47116,
+                374,
+                3545,
+                1483,
+                304,
+                57330,
+                4119,
+                11,
+                892,
+                525,
+                264,
+                943,
+                315,
+                1766,
+                1388,
+                1614,
+                429,
+                5711,
+                264,
+                4013,
+                315,
+                52970,
+                311,
+                5165,
+                264,
+                11980,
+                7982,
+                1119,
+                264,
+                2169,
+                7982,
+                13,
+                576,
+                2169,
+                7982,
+                374,
+                11136,
+                279,
+                7982,
+                315,
+                279,
+                4862,
+                821,
+                382,
+                17,
+                13,
+                3070,
+                61819,
+                53811,
+                95518,
+                576,
+                1882,
+                8471,
+                553,
+                87285,
+                11980,
+                1119,
+                279,
+                1946,
+                821,
+                13,
+                576,
+                11980,
+                374,
+                11136,
+                48568,
+                11980,
+                11,
+                323,
+                279,
+                8170,
+                315,
+                279,
+                11980,
+                374,
+                14071,
+                553,
+                264,
+                5733,
+                2598,
+                279,
+                330,
+                13490,
+                7560,
+                1,
+                5733,
+                13,
+                1634,
+                279,
+                57330,
+                5733,
+                12703,
+                11,
+                279,
+                8170,
+                315,
+                279,
+                11980,
+                12703,
+                382,
+                18,
+                13,
+                3070,
+                64263,
+                39861,
+                95518,
+                576,
+                1614,
+                1221,
+                16790,
+                264,
+                4013,
+                315,
+                52970,
+                311,
+                279,
+                49280,
+                821,
+                13,
+                4220,
+                52970,
+                525,
+                6188,
+                311,
+                4057,
+                279,
+                11980,
+                323,
+                43828,
+                279,
+                4024,
+                821,
+                13,
+                8886,
+                17991,
+                374,
+                11136,
+                264,
+                13482,
+                17991,
+                11,
+                8110,
+                553,
+                264,
+                2477,
+                61299,
+                17991,
+                1741,
+                438,
+                458,
+                15099,
+                729,
+                382,
+                19,
+                13,
+                3070,
+                10547,
+                287,
+                95518,
+                2411,
+                1817,
+                17991,
+                3019,
+                11,
+                279,
+                1614,
+                374,
+                65631,
+                389,
+                279,
+                3681,
+                17991,
+                13,
+                1096,
+                3363,
+                429,
+                279,
+                1614,
+                4990,
+                1119,
+                2692,
+                279,
+                1482,
+                1584,
+                315,
+                279,
+                821,
+                979,
+                18950,
+                279,
+                1790,
+                17991,
+                382,
+                20,
+                13,
+                3070,
+                4900,
+                3700,
+                95518,
+                2411,
+                279,
+                835,
+                315,
+                279,
+                1882,
+                11,
+                279,
+                1614,
+                702,
+                9251,
+                279,
+                12685,
+                1372,
+                315,
+                52970,
+                11,
+                279,
+                2550,
+                374,
+                264,
+                49280,
+                2319,
+                315,
+                279,
+                4024,
+                821,
+                382,
+                21,
+                13,
+                3070,
+                693,
+                47197,
+                95518,
+                2014,
+                43828,
+                279,
+                4024,
+                821]},
+ {'text': ' or is used how a works:\n'
+          '\n'
+          '1. **Reverse Process**: Diffusion models start with a reverse of '
+          'the diffusion process from a high-energy state to a low-energy '
+          'state. This is- is a simple distribution into a complex '
+          'distribution. The goal is to reverse this process during '
+          'inference.\n'
+          '\n'
+          '2. **Transformation Process**: The model**: a series of '
+          'transformations noise into the data. This noise is typically a '
+          'Gaussian distribution that is centered around the mean.\n'
+          '\n'
+          '3. **Transformation**: The modelSECTION applies a series of '
+          'transformations to the diffusion data increases, the strength of '
+          'the noise increases.\n'
+          '\n'
+          '3. **Transformations**: The model learns a series of '
+          'transformations to the noisy data. Each transformation is a '
+          'function of the current data and the diffusion parameter. The goal '
+          'of these transformations is to transform the noisy data back into '
+          'the to.\n'
+          '\n'
+          '4. **Decoding**: At the ** of**: After the transformation step, the '
+          'the diffusion parameter is used to reduce the strength of the noise '
+          'For model into account the current state of the system the strength '
+          'of the noise.\n'
+          '\n'
+          '5. **Decoding**: Once the diffusion parameter reached its initial '
+          'value, the-generator the model learns from applying iterative '
+          'nonlinear transformations averaging stochastic transformation '
+          'parameters.\n'
+          '\n'
+          '6. **Advantages**: There are several advantages of block-sparse '
+          'attention compared to dense',
+  'token_ids': [476,
+                374,
+                1483,
+                1246,
+                264,
+                4278,
+                1447,
+                16,
+                13,
+                3070,
+                45695,
+                8603,
+                95518,
+                28369,
+                7560,
+                4119,
+                1191,
+                448,
+                264,
+                9931,
+                315,
+                279,
+                57330,
+                1882,
+                504,
+                264,
+                1550,
+                64387,
+                1584,
+                311,
+                264,
+                3347,
+                64387,
+                1584,
+                13,
+                1096,
+                374,
+                12,
+                374,
+                264,
+                4285,
+                7982,
+                1119,
+                264,
+                6351,
+                7982,
+                13,
+                576,
+                5795,
+                374,
+                311,
+                9931,
+                419,
+                1882,
+                2337,
+                44378,
+                382,
+                17,
+                13,
+                3070,
+                64263,
+                8603,
+                95518,
+                576,
+                1614,
+                95518,
+                264,
+                4013,
+                315,
+                52970,
+                11980,
+                1119,
+                279,
+                821,
+                13,
+                1096,
+                11980,
+                374,
+                11136,
+                264,
+                48568,
+                7982,
+                429,
+                374,
+                30188,
+                2163,
+                279,
+                3076,
+                382,
+                18,
+                13,
+                3070,
+                64263,
+                95518,
+                576,
+                1614,
+                58778,
+                16790,
+                264,
+                4013,
+                315,
+                52970,
+                311,
+                279,
+                57330,
+                821,
+                12703,
+                11,
+                279,
+                8170,
+                315,
+                279,
+                11980,
+                12703,
+                382,
+                18,
+                13,
+                3070,
+                8963,
+                804,
+                95518,
+                576,
+                1614,
+                46210,
+                264,
+                4013,
+                315,
+                52970,
+                311,
+                279,
+                49280,
+                821,
+                13,
+                8886,
+                17991,
+                374,
+                264,
+                729,
+                315,
+                279,
+                1482,
+                821,
+                323,
+                279,
+                57330,
+                5733,
+                13,
+                576,
+                5795,
+                315,
+                1493,
+                52970,
+                374,
+                311,
+                5165,
+                279,
+                49280,
+                821,
+                1182,
+                1119,
+                279,
+                311,
+                382,
+                19,
+                13,
+                3070,
+                4900,
+                3700,
+                95518,
+                2411,
+                279,
+                3070,
+                315,
+                95518,
+                4636,
+                279,
+                17991,
+                3019,
+                11,
+                279,
+                279,
+                57330,
+                5733,
+                374,
+                1483,
+                311,
+                7949,
+                279,
+                8170,
+                315,
+                279,
+                11980,
+                1752,
+                1614,
+                1119,
+                2692,
+                279,
+                1482,
+                1584,
+                315,
+                279,
+                1849,
+                279,
+                8170,
+                315,
+                279,
+                11980,
+                382,
+                20,
+                13,
+                3070,
+                4900,
+                3700,
+                95518,
+                9646,
+                279,
+                57330,
+                5733,
+                8643,
+                1181,
+                2856,
+                897,
+                11,
+                279,
+                78002,
+                279,
+                1614,
+                46210,
+                504,
+                18950,
+                86875,
+                73998,
+                52970,
+                43764,
+                95240,
+                17991,
+                5029,
+                382,
+                21,
+                13,
+                3070,
+                23453,
+                37786,
+                95518,
+                2619,
+                525,
+                3807,
+                22146,
+                315,
+                2504,
+                1331,
+                6400,
+                6529,
+                7707,
+                311,
+                27950]},
+ {'text': ' It is designed to attention works and its advantages over dense '
+          'attention:\n'
+          '\n'
+          '1. **Efficiency**: Block-sparse attention is computationally '
+          'efficient compared to dense attention. Dense dense attention, where '
+          'each token in the input sequence is connected to every other token '
+          'in the query sequence.\n'
+          '\n'
+          '2. **Efficiency**: Block-sparse attention is more efficient than '
+          'dense attention, which computes a weighted of of all tokens in the '
+          'input sequence. This is particularly useful for long sequences, '
+          'where dense attention canSTYLE computationally expensive.\n'
+          '\n'
+          '2. **Efficient Sampling**: In sparse attention, the model only '
+          'samples a subset of the query tokens. This reduces the number '
+          'ofativas and computations required, which can reduce the '
+          'computational cost of the model. This is particularly beneficial '
+          'for large-scale models.\n'
+          '\n'
+          '3. **Memory Efficiency**: Block-sparse attention can be more '
+          'memory-efficient.\n'
+          '\n'
+          '4. **Conditionization**: At each time step, the model conditions '
+          'the input based on the previous output. This isokedex the model to '
+          'focus the state of the data and generates the next transformation.\n'
+          '\n'
+          '5. **Decoding**: At the final transformation step, the model '
+          'learns. BLACKodes the data sequentially using a sparse '
+          'representation. In dense attention, the encoder encodes the data '
+          'sequentially using a dense representation.\n'
+          '\n'
+          '**Advantages of Block Sparse',
+  'token_ids': [1084,
+                374,
+                6188,
+                311,
+                6529,
+                4278,
+                323,
+                1181,
+                22146,
+                916,
+                27950,
+                6529,
+                1447,
+                16,
+                13,
+                3070,
+                46588,
+                10387,
+                95518,
+                8362,
+                1331,
+                6400,
+                6529,
+                374,
+                3716,
+                29054,
+                11050,
+                7707,
+                311,
+                27950,
+                6529,
+                13,
+                42522,
+                27950,
+                6529,
+                11,
+                1380,
+                1817,
+                3950,
+                304,
+                279,
+                1946,
+                8500,
+                374,
+                8433,
+                311,
+                1449,
+                1008,
+                3950,
+                304,
+                279,
+                3239,
+                8500,
+                382,
+                17,
+                13,
+                3070,
+                46588,
+                10387,
+                95518,
+                8362,
+                1331,
+                6400,
+                6529,
+                374,
+                803,
+                11050,
+                1091,
+                27950,
+                6529,
+                11,
+                892,
+                57203,
+                264,
+                36824,
+                315,
+                315,
+                678,
+                11211,
+                304,
+                279,
+                1946,
+                8500,
+                13,
+                1096,
+                374,
+                7945,
+                5390,
+                369,
+                1293,
+                23700,
+                11,
+                1380,
+                27950,
+                6529,
+                646,
+                81977,
+                3716,
+                29054,
+                11392,
+                382,
+                17,
+                13,
+                3070,
+                46588,
+                5385,
+                95309,
+                95518,
+                758,
+                33444,
+                6529,
+                11,
+                279,
+                1614,
+                1172,
+                10469,
+                264,
+                25993,
+                315,
+                279,
+                3239,
+                11211,
+                13,
+                1096,
+                25271,
+                279,
+                1372,
+                315,
+                51541,
+                323,
+                82599,
+                2567,
+                11,
+                892,
+                646,
+                7949,
+                279,
+                54480,
+                2783,
+                315,
+                279,
+                1614,
+                13,
+                1096,
+                374,
+                7945,
+                23699,
+                369,
+                3460,
+                12934,
+                4119,
+                382,
+                18,
+                13,
+                3070,
+                10642,
+                66567,
+                95518,
+                8362,
+                1331,
+                6400,
+                6529,
+                646,
+                387,
+                803,
+                4938,
+                72816,
+                382,
+                19,
+                13,
+                3070,
+                10547,
+                2022,
+                95518,
+                2411,
+                1817,
+                882,
+                3019,
+                11,
+                279,
+                1614,
+                4682,
+                279,
+                1946,
+                3118,
+                389,
+                279,
+                3681,
+                2550,
+                13,
+                1096,
+                374,
+                86331,
+                279,
+                1614,
+                311,
+                5244,
+                279,
+                1584,
+                315,
+                279,
+                821,
+                323,
+                26885,
+                279,
+                1790,
+                17991,
+                382,
+                20,
+                13,
+                3070,
+                4900,
+                3700,
+                95518,
+                2411,
+                279,
+                1590,
+                17991,
+                3019,
+                11,
+                279,
+                1614,
+                46210,
+                13,
+                36647,
+                2539,
+                279,
+                821,
+                94559,
+                1667,
+                264,
+                33444,
+                13042,
+                13,
+                758,
+                27950,
+                6529,
+                11,
+                279,
+                23668,
+                3209,
+                2539,
+                279,
+                821,
+                94559,
+                1667,
+                264,
+                27950,
+                13042,
+                382,
+                334,
+                23453,
+                37786,
+                315,
+                8362,
+                71794]},
+ {'text': '的热情 of how can lead to the memory **Model Basics**: Diffusion '
+          'models are typically based on a diffusion process, which is a '
+          'stochastic process that describes how a quantity spreads of '
+          'transformations to over time noise distribution into a data '
+          'distribution. The reverse process is used to over the data '
+          'distribution into the noise distribution.\n'
+          '\n'
+          '2. **Transformation process**: The model random into a latent of. '
+          'This noise is the starting of the the model will use to approximate '
+          'the data distribution.\n'
+          '\n'
+          '3. **Transformationroll**: The model then " the diffusion" '
+          'increases, the strength of the noise increases.\n'
+          '\n'
+          '3. **Transformation**:**: The model then applies a series of '
+          'transformations to the noisy data. These transformations are '
+          'designed to remove the noise and bring the data closer to the '
+          'target distribution. Initially of the process, the strength of the '
+          'noise is high, and the.\n'
+          '\n'
+          '4. **Conditioning**: At each time step, the model is conditioned on '
+          'the previous tokens of the sequence. This means that into account '
+          'the current state of the the when applying the the next.\n'
+          '\n'
+          '5. **Decoding**: After the end of of the diffusion steps, the '
+          'modelérience to decode the original input from the transformed '
+          'data. This is done by reversing the series of transformations and '
+          'removing the noise.\n'
+          '\n'
+          '6. **Optimization**: The',
+  'token_ids': [108845,
+                315,
+                1246,
+                646,
+                2990,
+                311,
+                279,
+                4938,
+                3070,
+                1712,
+                67176,
+                95518,
+                28369,
+                7560,
+                4119,
+                525,
+                11136,
+                3118,
+                389,
+                264,
+                57330,
+                1882,
+                11,
+                892,
+                374,
+                264,
+                95240,
+                1882,
+                429,
+                16555,
+                1246,
+                264,
+                12194,
+                42553,
+                315,
+                52970,
+                311,
+                916,
+                882,
+                11980,
+                7982,
+                1119,
+                264,
+                821,
+                7982,
+                13,
+                576,
+                9931,
+                1882,
+                374,
+                1483,
+                311,
+                916,
+                279,
+                821,
+                7982,
+                1119,
+                279,
+                11980,
+                7982,
+                382,
+                17,
+                13,
+                3070,
+                64263,
+                1882,
+                95518,
+                576,
+                1614,
+                4194,
+                1119,
+                264,
+                41667,
+                315,
+                13,
+                1096,
+                11980,
+                374,
+                279,
+                5916,
+                315,
+                279,
+                279,
+                1614,
+                686,
+                990,
+                311,
+                44868,
+                279,
+                821,
+                7982,
+                382,
+                18,
+                13,
+                3070,
+                64263,
+                1100,
+                95518,
+                576,
+                1614,
+                1221,
+                330,
+                279,
+                57330,
+                1,
+                12703,
+                11,
+                279,
+                8170,
+                315,
+                279,
+                11980,
+                12703,
+                382,
+                18,
+                13,
+                3070,
+                64263,
+                95518,
+                95518,
+                576,
+                1614,
+                1221,
+                16790,
+                264,
+                4013,
+                315,
+                52970,
+                311,
+                279,
+                49280,
+                821,
+                13,
+                4220,
+                52970,
+                525,
+                6188,
+                311,
+                4057,
+                279,
+                11980,
+                323,
+                4446,
+                279,
+                821,
+                12128,
+                311,
+                279,
+                2169,
+                7982,
+                13,
+                58556,
+                315,
+                279,
+                1882,
+                11,
+                279,
+                8170,
+                315,
+                279,
+                11980,
+                374,
+                1550,
+                11,
+                323,
+                279,
+                382,
+                19,
+                13,
+                3070,
+                10547,
+                287,
+                95518,
+                2411,
+                1817,
+                882,
+                3019,
+                11,
+                279,
+                1614,
+                374,
+                65631,
+                389,
+                279,
+                3681,
+                11211,
+                315,
+                279,
+                8500,
+                13,
+                1096,
+                3363,
+                429,
+                1119,
+                2692,
+                279,
+                1482,
+                1584,
+                315,
+                279,
+                279,
+                979,
+                18950,
+                279,
+                279,
+                1790,
+                382,
+                20,
+                13,
+                3070,
+                4900,
+                3700,
+                95518,
+                4636,
+                279,
+                835,
+                315,
+                315,
+                279,
+                57330,
+                7354,
+                11,
+                279,
+                1614,
+                64579,
+                311,
+                16895,
+                279,
+                4024,
+                1946,
+                504,
+                279,
+                23507,
+                821,
+                13,
+                1096,
+                374,
+                2814,
+                553,
+                75183,
+                279,
+                4013,
+                315,
+                52970,
+                323,
+                17592,
+                279,
+                11980,
+                382,
+                21,
+                13,
+                3070,
+                21367,
+                65964,
+                95518,
+                576]},
+ {'text': ' `\n'
+          '\n'
+          '`How to identify the GPU architecture and adapt Triton kernels '
+          'dynamically based on that architecture using a script or program '
+          "that's running on a GPU. This\n"
+          '\n'
+          '2. **Identify the GPU architectures and their characteristics**: '
+          'Depending on the GPU architecture, you can identify the specific '
+          'characteristics of the training process.\n'
+          '\n'
+          '3. **Modify the kernel noise** into the input data. This noise is '
+          'used to simulate the effect of of the input data of the kernel.\n'
+          '\n'
+          '3. **Noiseolution**: The "time." Evolved time, the variance of the '
+          'noise, and the model learns to remove the noise from the noise-free '
+          'image.\n'
+          '\n'
+          '2. **Evolution**: The model uses a series of devolution steps to '
+          'gradually remove the noise from the input. Each step in the '
+          'evolution process involves applying the inverseolution to the model '
+          'the evolution.\n'
+          '\n'
+          ' **Conditioning**: Evolution time step, the model is conditioned on '
+          'theolution state. This means that the model is trained to predict '
+          'the current of the data and apply the next transformation.\n'
+          '\n'
+          '**Revolution Decoding**: At the end of the process, the model has '
+          'decoded the original data from the noise. This process is called '
+          '"Reversal" or "Revolution." The model learns to remove the noise '
+          'and recover the original data',
+  'token_ids': [1565,
+                271,
+                63,
+                4340,
+                311,
+                10542,
+                279,
+                22670,
+                17646,
+                323,
+                10515,
+                84183,
+                263,
+                63515,
+                42011,
+                3118,
+                389,
+                429,
+                17646,
+                1667,
+                264,
+                5316,
+                476,
+                2025,
+                429,
+                594,
+                4303,
+                389,
+                264,
+                22670,
+                13,
+                1096,
+                271,
+                17,
+                13,
+                3070,
+                28301,
+                1437,
+                279,
+                22670,
+                77235,
+                323,
+                862,
+                17452,
+                95518,
+                39630,
+                389,
+                279,
+                22670,
+                17646,
+                11,
+                498,
+                646,
+                10542,
+                279,
+                3151,
+                17452,
+                315,
+                279,
+                4862,
+                1882,
+                382,
+                18,
+                13,
+                3070,
+                44427,
+                279,
+                10001,
+                11980,
+                334,
+                1119,
+                279,
+                1946,
+                821,
+                13,
+                1096,
+                11980,
+                374,
+                1483,
+                311,
+                37453,
+                279,
+                2456,
+                315,
+                315,
+                279,
+                1946,
+                821,
+                315,
+                279,
+                10001,
+                382,
+                18,
+                13,
+                3070,
+                61819,
+                3214,
+                95518,
+                576,
+                330,
+                1678,
+                1189,
+                10424,
+                8731,
+                882,
+                11,
+                279,
+                32273,
+                315,
+                279,
+                11980,
+                11,
+                323,
+                279,
+                1614,
+                46210,
+                311,
+                4057,
+                279,
+                11980,
+                504,
+                279,
+                11980,
+                12577,
+                2168,
+                382,
+                17,
+                13,
+                3070,
+                34112,
+                3214,
+                95518,
+                576,
+                1614,
+                5711,
+                264,
+                4013,
+                315,
+                3483,
+                3214,
+                7354,
+                311,
+                26024,
+                4057,
+                279,
+                11980,
+                504,
+                279,
+                1946,
+                13,
+                8886,
+                3019,
+                304,
+                279,
+                15379,
+                1882,
+                17601,
+                18950,
+                279,
+                27949,
+                3214,
+                311,
+                279,
+                1614,
+                279,
+                3637,
+                3214,
+                382,
+                3070,
+                10547,
+                287,
+                95518,
+                10424,
+                3214,
+                882,
+                3019,
+                11,
+                279,
+                1614,
+                374,
+                65631,
+                389,
+                279,
+                3214,
+                1584,
+                13,
+                1096,
+                3363,
+                429,
+                279,
+                1614,
+                374,
+                16176,
+                311,
+                7023,
+                279,
+                1482,
+                315,
+                279,
+                821,
+                323,
+                3796,
+                279,
+                1790,
+                17991,
+                382,
+                334,
+                36184,
+                3214,
+                3714,
+                3700,
+                95518,
+                2411,
+                279,
+                835,
+                315,
+                279,
+                1882,
+                11,
+                279,
+                1614,
+                702,
+                29213,
+                279,
+                4024,
+                821,
+                504,
+                279,
+                11980,
+                13,
+                1096,
+                1882,
+                374,
+                2598,
+                330,
+                693,
+                3004,
+                278,
+                1,
+                476,
+                330,
+                36184,
+                3214,
+                1189,
+                576,
+                1614,
+                46210,
+                311,
+                4057,
+                279,
+                11980,
+                323,
+                11731,
+                279,
+                4024,
+                821]}]
