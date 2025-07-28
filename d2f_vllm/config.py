@@ -12,8 +12,8 @@ class Config:
     mask_token_id: int = 151666
     diffusion_block_size: int = 32
     
-    accept_threshold: float = 0.95
-    complete_threshold: float = 0.9
+    accept_threshold: float = 0.9
+    complete_threshold: float = 0.95
     add_new_block_threshold: float = 0.1
     
     use_lora: bool = False

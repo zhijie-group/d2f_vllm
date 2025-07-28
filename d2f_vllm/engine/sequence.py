@@ -368,7 +368,7 @@ class SequenceForDiffusionLM(SequenceBase):
         return cached_num_tokens - 1
     
     @property
-    def caching_num_tokens(self) -> int:
+    def cached_num_tokens(self) -> int:
         return self.cached_last_token_id + 1
     
     @property
