@@ -75,15 +75,18 @@ class LinearBase(nn.Module):
         raise NotImplementedError
 
 
-class ReplicatedLinear(LinearBase):
+class ReplicatedLinear(LinearBase, LoRAMixin):
 
     def __init__(
         self,
         input_size: int,
         output_size: int,
         bias: bool = False,
+        r: int = 0,
+        lora_alpha: float = 1.0,
+        lora_dropout: float = 0.0,
     ):
-        super().__init__(input_size, output_size)
+        LinearBase.__init__(self, input_size, output_size)
         self.weight = nn.Parameter(torch.empty(self.output_size, self.input_size))
         self.weight.weight_loader = self.weight_loader
         if bias:
@@ -91,12 +94,15 @@ class ReplicatedLinear(LinearBase):
             self.bias.weight_loader = self.weight_loader
         else:
             self.register_parameter("bias", None)
+        
+        self.__init_lora__(r, lora_alpha, lora_dropout)
 
     def weight_loader(self, param: nn.Parameter, loaded_weight: torch.Tensor):
         param.data.copy_(loaded_weight)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return F.linear(x, self.weight, self.bias)
+        base_out = F.linear(x, self.weight, self.bias)
+        return self.lora_forward(x, base_out)
 
 
 class ColumnParallelLinear(LinearBase, LoRAMixin):
@@ -108,6 +114,7 @@ class ColumnParallelLinear(LinearBase, LoRAMixin):
         bias: bool = False,
         r: int = 0,
         lora_alpha: float = 1.0,
+        lora_dropout: float = 0.0,
     ):
         LinearBase.__init__(self, input_size, output_size, 0)
         self.input_size_per_partition = input_size
@@ -121,7 +128,7 @@ class ColumnParallelLinear(LinearBase, LoRAMixin):
         else:
             self.register_parameter("bias", None)
         
-        self.__init_lora__(r, lora_alpha)
+        self.__init_lora__(r, lora_alpha, lora_dropout)
 
     def weight_loader(self, param: nn.Parameter, loaded_weight: torch.Tensor):
         param_data = param.data
@@ -142,9 +149,12 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
         input_size: int,
         output_sizes: list[int],
         bias: bool = False,
+        r: int = 0,
+        lora_alpha: float = 1.0,
+        lora_dropout: float = 0.0,
     ):
         self.output_sizes = output_sizes
-        super().__init__(input_size, sum(output_sizes), bias=bias)
+        super().__init__(input_size, sum(output_sizes), bias=bias, r=r, lora_alpha=lora_alpha, lora_dropout=lora_dropout)
 
     def weight_loader(self, param: nn.Parameter, loaded_weight: torch.Tensor, loaded_shard_id: int):
         param_data = param.data
@@ -164,6 +174,9 @@ class QKVParallelLinear(ColumnParallelLinear):
         total_num_heads: int,
         total_num_kv_heads: int | None = None,
         bias: bool = False,
+        r: int = 0,
+        lora_alpha: float = 1.0,
+        lora_dropout: float = 0.0,
     ):
         self.head_size = head_size
         self.total_num_heads = total_num_heads
@@ -173,7 +186,7 @@ class QKVParallelLinear(ColumnParallelLinear):
         self.num_kv_heads = divide(self.total_num_kv_heads, tp_size)
         input_size = hidden_size
         output_size = (self.total_num_heads + 2 * self.total_num_kv_heads) * self.head_size
-        super().__init__(input_size, output_size, bias)
+        super().__init__(input_size, output_size, bias, r, lora_alpha, lora_dropout)
 
     def weight_loader(self, param: nn.Parameter, loaded_weight: torch.Tensor, loaded_shard_id: str):
         param_data = param.data
@@ -201,6 +214,7 @@ class RowParallelLinear(LinearBase, LoRAMixin):
         bias: bool = False,
         r: int = 0,
         lora_alpha: float = 1.0,
+        lora_dropout: float = 0.0,
     ):
         LinearBase.__init__(self, input_size, output_size, 1)
         self.input_size_per_partition = divide(input_size, self.tp_size)
@@ -214,7 +228,7 @@ class RowParallelLinear(LinearBase, LoRAMixin):
         else:
             self.register_parameter("bias", None)
         
-        self.__init_lora__(r, lora_alpha)
+        self.__init_lora__(r, lora_alpha, lora_dropout)
 
     def weight_loader(self, param: nn.Parameter, loaded_weight: torch.Tensor):
         param_data = param.data

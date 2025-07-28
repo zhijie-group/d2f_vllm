@@ -22,10 +22,16 @@ def enable_lora_for_model(model: nn.Module, lora_config: dict):
     """Enable LoRA for existing linear layers in the model."""
     r = lora_config.get('r', 16)
     lora_alpha = lora_config.get('lora_alpha', 32.0)
+    lora_dropout = lora_config.get('lora_dropout', 0.0)
+    target_modules = lora_config.get('target_modules', [])
     
-    for module in model.modules():
+    for name, module in model.named_modules():
         if hasattr(module, '__init_lora__'):
-            module.__init_lora__(r, lora_alpha)
+            should_apply = True
+            if target_modules:
+                should_apply = any(target in name for target in target_modules)
+            if should_apply:
+                module.__init_lora__(r, lora_alpha, lora_dropout)
     return model
 
 
@@ -39,11 +45,12 @@ def load_model(model: nn.Module, config: Config):
     if config.use_lora and config.lora_path:
         lora_config = load_lora_config(config.lora_path)
         if lora_config:
-            print(f"Found LoRA config: r={lora_config.get('r', 16)}, alpha={lora_config.get('lora_alpha', 32.0)}")
+            print(f"LoRA Config Loaded: {lora_config}")
             model = enable_lora_for_model(model, lora_config)
         else:
             print("No adapter_config.json found, using default LoRA parameters")
-            model = enable_lora_for_model(model, {'r': 16, 'lora_alpha': 32.0})
+            default_config = {'r': 16, 'lora_alpha': 32.0, 'lora_dropout': 0.0}
+            model = enable_lora_for_model(model, default_config)
     
     # Load base model weights
     packed_modules_mapping = getattr(model, "packed_modules_mapping", {})
@@ -77,31 +84,27 @@ def load_model(model: nn.Module, config: Config):
 def load_lora_weights(model: nn.Module, lora_path: str):
     """Load LoRA weights into LoRA-enabled layers."""
     try:
-        # Load LoRA config for additional info
         lora_config = load_lora_config(lora_path)
         target_modules = lora_config.get('target_modules', [])
         
         lora_weights = {}
         
-        # Load all LoRA weights
         for file in tqdm(glob(os.path.join(lora_path, "*.safetensors")), desc="Loading LoRA"):
             with safe_open(file, "pt", "cpu") as f:
                 for weight_name in f.keys():
                     lora_weights[weight_name] = f.get_tensor(weight_name)
         
-        # Apply LoRA weights to model
         applied_count = 0
         for name, module in model.named_modules():
             if hasattr(module, 'lora_A') and hasattr(module, 'lora_B'):
-                # Check if this module should have LoRA applied
                 should_apply = True
                 if target_modules:
-                    should_apply = any(target in name for target in target_modules)
+                    module_type = name.split('.')[-1] if '.' in name else name
+                    should_apply = any(target in module_type for target in target_modules)
                 
                 if not should_apply:
                     continue
                 
-                # Look for corresponding LoRA weights with various naming patterns
                 base_patterns = [
                     name,
                     f"base_model.model.{name}",
@@ -112,13 +115,13 @@ def load_lora_weights(model: nn.Module, lora_path: str):
                 for base_name in base_patterns:
                     lora_a_keys = [
                         f"{base_name}.lora_A.weight",
+                        f"{base_name}.lora_A.default.weight",
                         f"{base_name}.lora_A",
-                        f"{base_name}.lora_A.default.weight"
                     ]
                     lora_b_keys = [
                         f"{base_name}.lora_B.weight", 
+                        f"{base_name}.lora_B.default.weight",
                         f"{base_name}.lora_B",
-                        f"{base_name}.lora_B.default.weight"
                     ]
                     
                     for key in lora_a_keys:
@@ -134,13 +137,12 @@ def load_lora_weights(model: nn.Module, lora_path: str):
                         break
                 
                 if found_a is not None and found_b is not None:
-                    # Handle tensor parallel sharding if needed
                     if hasattr(module, 'tp_size') and module.tp_size > 1:
-                        if hasattr(module, 'tp_dim') and module.tp_dim == 0:  # Column parallel
+                        if hasattr(module, 'tp_dim') and module.tp_dim == 0:
                             shard_size = found_b.size(0) // module.tp_size
                             start_idx = module.tp_rank * shard_size
                             found_b = found_b[start_idx:start_idx + shard_size]
-                        elif hasattr(module, 'tp_dim') and module.tp_dim == 1:  # Row parallel
+                        elif hasattr(module, 'tp_dim') and module.tp_dim == 1:
                             shard_size = found_a.size(1) // module.tp_size
                             start_idx = module.tp_rank * shard_size
                             found_a = found_a[:, start_idx:start_idx + shard_size]
@@ -152,7 +154,6 @@ def load_lora_weights(model: nn.Module, lora_path: str):
                     except Exception as e:
                         print(f"Failed to load LoRA weights for {name}: {e}")
         
-        # Merge LoRA weights for efficient inference
         for module in model.modules():
             if hasattr(module, 'merge_lora'):
                 module.merge_lora()

@@ -52,10 +52,6 @@ class SequenceBase:
         return self.token_ids[:self.num_prompt_tokens]
 
     @property
-    def completion_token_ids(self) -> List[int]:
-        return self.token_ids[self.num_prompt_tokens:]
-
-    @property
     def num_cached_blocks(self) -> int:
         return self.num_cached_tokens // self.block_size
 
@@ -99,6 +95,10 @@ class SequenceForCausalLM(SequenceBase):
             self.token_ids = state[-1]
         else:
             self.last_token = state[-1]
+            
+    @property
+    def completion_token_ids(self) -> List[int]:
+        return self.token_ids[self.num_prompt_tokens:]
 
 
 class DiffusionBlockStatus(Enum):
@@ -318,7 +318,11 @@ class SequenceForDiffusionLM(SequenceBase):
                 f"temperature={self.temperature}, max_tokens={self.max_tokens}, ignore_eos={self.ignore_eos}, "
                 f"diffusion_block_size={self.diffusion_block_size}, current_block_mask={self.current_block_mask.shape}, "
                 f"input_token_ids={self.input_token_ids}, input_num_tokens={self.input_num_tokens})")
-        
+    
+    @property
+    def completion_token_ids(self) -> List[int]:
+        return self.token_ids[self.input_num_prompt_tokens:]
+    
     @property
     def active_blocks(self) -> List[bool]:
         return [block.is_active for block in self.diffusion_blocks]

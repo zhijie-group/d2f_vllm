@@ -2,6 +2,7 @@ import torch
 import triton
 
 import torch.nn as nn
+import torch.nn.functional as F
 import triton.language as tl
 
 from typing import List
@@ -94,7 +95,8 @@ class Attention(nn.Module):
             "BLOCK_M2": 64,
             "BLOCK_N2": 32,
         } if is_rtx_xx90(torch.cuda.get_device_name(0)) else None
-        self.flex_attention = torch.compile(partial(flex_attention, kernel_options=kernel_options, enable_gqa=True), dynamic=False)
+        self.flex_attention = torch.compile(
+            partial(flex_attention, kernel_options=kernel_options, enable_gqa=True), dynamic=True)
         self._block_mask_cache = {}
         
     @lru_cache(maxsize=32)
@@ -175,6 +177,7 @@ class Attention(nn.Module):
                 B, H, Skv, _ = k_cache.shape
                 dllm_block_mask = self.dllm_block_mask(context.block_mask, B, H, Sq, Skv, str(q.device))
                 o = self.flex_attention(q, k_cache, v_cache, block_mask=dllm_block_mask).squeeze(0)
+                # o = F.scaled_dot_product_attention(q, k_cache, v_cache, attn_mask=dllm_block_mask, enable_gqa=True).squeeze(0)
             else:
                 raise ValueError(f"Unsupported model type: {self.model_type}")
         if self.model_type == 'causal_lm':
