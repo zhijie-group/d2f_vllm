@@ -59,7 +59,8 @@ class ModelRunnerBase(ABC):
                     print("Removed existing shared memory segment.")
                 except FileNotFoundError:
                     print("Shared memory segment does not exist, creating a new one.")
-                self.shm = SharedMemory(name="d2f_vllm", create=True, size=2**20)
+                shm_size = 2**22 if self.model_type == "diffusion_lm" else 2**20
+                self.shm = SharedMemory(name="d2f_vllm", create=True, size=shm_size)
                 dist.barrier()
             else:
                 dist.barrier()
@@ -96,6 +97,11 @@ class ModelRunnerBase(ABC):
         assert self.world_size > 1 and not self.rank
         data = pickle.dumps([method_name, *args])
         n = len(data)
+        
+        if n + 4 > len(self.shm.buf):
+            raise ValueError(f"Serialized data size ({n} bytes) exceeds shared memory buffer size ({len(self.shm.buf)} bytes). "
+                           f"Consider increasing shared memory size or reducing batch size.")
+        
         self.shm.buf[0:4] = n.to_bytes(4, "little")
         self.shm.buf[4:n+4] = data
         for event in self.event:
@@ -327,6 +333,7 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
         self.mask_token_id = config.mask_token_id
             
     def warmup_model(self):
+        return
         torch.cuda.empty_cache()
         torch.cuda.reset_peak_memory_stats()
         max_num_batched_tokens, max_model_len = self.config.max_num_batched_tokens, self.config.max_model_len
@@ -334,6 +341,8 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
         test_input_ids = [0] * max_model_len
         seqs = [SequenceForDiffusionLM(test_input_ids, config=self.config) for _ in range(num_seqs)]
         self.run(seqs, True)
+        for seq in seqs:
+            seq.post_process()
         torch.cuda.empty_cache()
 
     def prepare_prefill(self, seqs: List[SequenceForDiffusionLM]):
@@ -386,11 +395,9 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
         context_lens = []
         seq_split = []
         seq_id_to_queue_id = {}
-        # print("="*20)
         for seq_idx_in_queue, seq in enumerate(seqs): 
             seq_id = seq.seq_id
             seq_id_to_queue_id[seq_id] = seq_idx_in_queue
-            # print(seq_id)
             seq.next_diffusion_step()
             temp_input_ids, temp_positions, temp_context_len = seq.diffusion_decoding_inputs()
             seq_split.append(len(temp_input_ids))
@@ -471,8 +478,47 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
 
     @torch.inference_mode()
     def capture_cudagraph(self):
-        # TODO: Implement DLM-specific CUDA graph capture
-        pass
+        config = self.config
+        hf_config = config.hf_config
+        max_bs = min(self.config.max_num_seqs, 512)
+        max_num_blocks = (config.max_model_len + self.block_size - 1) // self.block_size
+        input_ids = torch.zeros(max_bs, dtype=torch.int64)
+        positions = torch.zeros(max_bs, dtype=torch.int64)
+        slot_mapping = torch.zeros(max_bs, dtype=torch.int32)
+        context_lens = torch.zeros(max_bs, dtype=torch.int32)
+        block_tables = torch.zeros(max_bs, max_num_blocks, dtype=torch.int32)
+        outputs = torch.zeros(max_bs, hf_config.hidden_size)
+        self.graph_bs = [1, 2, 4, 8] + list(range(16, max_bs + 1, 16))
+        self.graphs = {}
+        self.graph_pool = None
+        
+        for bs in reversed(self.graph_bs):
+            graph = torch.cuda.CUDAGraph()
+            seqs = [SequenceForDiffusionLM(
+                config=self.config,
+                input_ids=input_ids[:bs].tolist(),
+                positions=positions[:bs].tolist(),
+            ).next_diffusion_step(is_prefill=True)]
+            set_context_diffusion_lm(
+                prefill=False, slot_mapping=slot_mapping[:bs], context_lens=context_lens[:bs], 
+                block_tables=block_tables[:bs], seq_split=[len(seq) for seq in seqs], seqs=seqs)
+            outputs[:bs] = self.model(input_ids[:bs], positions[:bs])    # warmup
+            with torch.cuda.graph(graph, self.graph_pool):
+                outputs[:bs] = self.model(input_ids[:bs], positions[:bs])    # capture
+            if self.graph_pool is None:
+                self.graph_pool = graph.pool()
+            self.graphs[bs] = graph
+            torch.cuda.synchronize()
+            reset_context_diffusion_lm()
+
+        self.graph_vars = dict(
+            input_ids=input_ids,
+            positions=positions,
+            slot_mapping=slot_mapping,
+            context_lens=context_lens,
+            block_tables=block_tables,
+            outputs=outputs,
+        )
     
 
 class AutoModelRunner:

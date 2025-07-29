@@ -55,7 +55,7 @@ class ContextForDiffusionLM(ContextBase):
     def __post_init__(self):
         if self.seqs is not None and len(self.seqs) > 0:
             if self.is_prefill:
-                masks = [seq.current_block_mask for seq in self.seqs]
+                masks = [seq.block_mask for seq in self.seqs]
                 total_len = sum(mask.size(-1) for mask in masks)
                 self.block_mask = torch.zeros(total_len, total_len, dtype=torch.bool)
                 
@@ -67,7 +67,7 @@ class ContextForDiffusionLM(ContextBase):
                     start_idx = end_idx
                 self.block_mask = self.block_mask.to(mask.device)
             else:
-                masks = [seq.current_block_mask[:, :, -self.seq_split[idx]:, :] for idx, seq in enumerate(self.seqs)]
+                masks = [seq.block_mask[:, :, -self.seq_split[idx]:, :] for idx, seq in enumerate(self.seqs)]
                 total_height = sum(mask.size(-2) for mask in masks)
                 total_width = sum(mask.size(-1) for mask in masks)
                 self.block_mask = torch.zeros(total_height, total_width, dtype=torch.bool)

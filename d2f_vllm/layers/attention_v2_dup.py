@@ -2,7 +2,6 @@ import torch
 import triton
 
 import torch.nn as nn
-import torch.nn.functional as F
 import triton.language as tl
 
 from typing import List
@@ -18,6 +17,7 @@ if is_rtx_xx90(torch.cuda.get_device_name(0)):
 else:
     from flash_attn import flash_attn_varlen_func, flash_attn_with_kvcache
 
+from d2f_vllm.engine.sequence import SequenceForDiffusionLM
 from d2f_vllm.utils.context import (
     ContextForCausalLM, ContextForDiffusionLM, 
     get_context_causal_lm, get_context_diffusion_lm
@@ -97,21 +97,67 @@ class Attention(nn.Module):
         } if is_rtx_xx90(torch.cuda.get_device_name(0)) else None
         self.flex_attention = torch.compile(
             partial(flex_attention, kernel_options=kernel_options, enable_gqa=True), dynamic=True)
-        self._block_mask_cache = {}
         
-    @lru_cache(maxsize=32)
-    def dllm_block_mask(self, block_mask: torch.Tensor, 
+    def dllm_block_mask(self, seqs: List[SequenceForDiffusionLM], 
                         B: int, H: int, Q_LEN: int, KV_LEN: int, device: str):
-        cache_key = (B, H, Q_LEN, KV_LEN, device)
-        def _mask_mod(batch, head, token_q, token_kv):
-            return block_mask[token_q, token_kv]
-        if cache_key not in self._block_mask_cache:
-            self._block_mask_cache[cache_key] = create_block_mask(
-                _mask_mod, B, H, Q_LEN, KV_LEN, device=device
-            )
-        return self._block_mask_cache[cache_key]
+        diffusion_block_size = seqs[0].diffusion_block_size
+        prefix_lens = [seq.input_num_tokens for seq in seqs]
+        num_cached_blocks = [len(seq.cached_block_ids) for seq in seqs]
+        num_computing_blocks = [seq.num_diffusion_blocks - num_cached_blocks[idx]
+                                for idx, seq in enumerate(seqs)]
+        total_lens = [len(seq) for seq in seqs]
+        
+        q_idx_to_doc_map = []
+        kv_idx_to_doc_map = []
+        q_in_doc_idx_to_block_maps = []
+        kv_in_doc_idx_to_block_maps = []
+        for idx, (n_compt_blks, total_len) in enumerate(zip(num_computing_blocks, total_lens)):
+            q_in_doc_idx_to_block_map = []
+            kv_in_doc_idx_to_block_map = []
+            prefill = True if num_cached_blocks[idx] == 0 else False
+            if prefill:
+                q_idx_to_doc_map.extend([idx] * total_len)
+                kv_idx_to_doc_map.extend([idx] * total_len)
+                temp = [0] * prefix_lens[idx] + [1] * diffusion_block_size
+                q_in_doc_idx_to_block_map.extend(temp)
+                kv_in_doc_idx_to_block_map.extend(temp)
+            else:
+                q_idx_to_doc_map.extend([idx] * (n_compt_blks * diffusion_block_size))
+                kv_idx_to_doc_map.extend([idx] * total_len)
+                for diff_blk_id in range(n_compt_blks):
+                    temp = [diff_blk_id] * diffusion_block_size
+                    q_in_doc_idx_to_block_map.extend(temp)
+                    kv_in_doc_idx_to_block_map.extend(temp)
+                in_cache = [-1] * (total_len - n_compt_blks * diffusion_block_size)
+                kv_in_doc_idx_to_block_map = in_cache + kv_in_doc_idx_to_block_map
+                
+            q_in_doc_idx_to_block_maps.extend(q_in_doc_idx_to_block_map)
+            kv_in_doc_idx_to_block_maps.extend(kv_in_doc_idx_to_block_map)
+        
+        q_idx_to_doc_map = torch.tensor(q_idx_to_doc_map, dtype=torch.int32, device=device)
+        kv_idx_to_doc_map = torch.tensor(kv_idx_to_doc_map, dtype=torch.int32, device=device)
+        q_in_doc_idx_to_block_maps = torch.tensor(q_in_doc_idx_to_block_maps, dtype=torch.int32, device=device)
+        kv_in_doc_idx_to_block_maps = torch.tensor(kv_in_doc_idx_to_block_maps, dtype=torch.int32, device=device)
+        
+        def dllm_document_block_wise_causal_mask(b, h, q_idx, kv_idx):
+            # Document mask
+            document_mask = q_idx_to_doc_map[q_idx] == kv_idx_to_doc_map[kv_idx]
+            
+            # Inner-doc block-wise causal mask
+            q_block_id = q_in_doc_idx_to_block_maps[q_idx]
+            kv_block_id = kv_in_doc_idx_to_block_maps[kv_idx]
+
+            in_doc_block_wise_causal_mask = q_block_id >= kv_block_id
+            
+            return document_mask & in_doc_block_wise_causal_mask
+        
+        return create_block_mask(
+            dllm_document_block_wise_causal_mask, 
+            B, H, Q_LEN, KV_LEN, device=device
+        )
 
     # TODO: Optimize Diffusion LM Attention !!!
+    # @torch.compile
     def forward(self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor,
                 mask: List[torch.Tensor] | None = None) -> torch.Tensor:
         o: torch.Tensor
@@ -140,7 +186,7 @@ class Attention(nn.Module):
                 transpose_fn = lambda x: rearrange(x, 's h d -> h s d').unsqueeze(0)
                 q, k, v = [transpose_fn(tensor) for tensor in (q, k, v)]
                 B, H, S, _ = q.shape
-                dllm_block_mask = self.dllm_block_mask(context.block_mask, B, H, S, S, str(q.device))
+                dllm_block_mask = self.dllm_block_mask(context.seqs, B, H, S, S, str(q.device))
                 o = self.flex_attention(q, k, v, block_mask=dllm_block_mask).squeeze(0)
             else:
                 raise ValueError(f"Unsupported model type: {self.model_type}")
@@ -152,7 +198,6 @@ class Attention(nn.Module):
                     softmax_scale=self.scale, causal=self.causal
                 )
             elif self.model_type == 'diffusion_lm':
-                
                 transpose_fn = lambda x: rearrange(x, 's h d -> h s d').unsqueeze(0)
                 q = transpose_fn(q)
                 k_list, v_list = [torch.split(tensor, context.seq_split, dim=0) for tensor in (k, v)]
@@ -169,16 +214,14 @@ class Attention(nn.Module):
                         mem_block_size = k_cache.shape[1]
                         cur_window = mem_block_size if mem_block_size <= cur_context_len else cur_context_len % mem_block_size
                         cur_context_len = cur_context_len - cur_window
-                        k_cache_temp = k_mem_block[:cur_window] if k_cache_temp is None \
-                            else torch.cat((k_cache_temp, k_mem_block[:cur_window]), dim=0)
-                        v_cache_temp = v_mem_block[:cur_window] if v_cache_temp is None \
-                            else torch.cat((v_cache_temp, v_mem_block[:cur_window]), dim=0)
+                        k_cache_temp = k_mem_block[:cur_window] if k_cache_temp is None else torch.cat((k_cache_temp, k_mem_block[:cur_window]), dim=0)
+                        v_cache_temp = v_mem_block[:cur_window] if v_cache_temp is None else torch.cat((v_cache_temp, v_mem_block[:cur_window]), dim=0)
                     cat_k_list.extend([k_cache_temp, k])
                     cat_v_list.extend([v_cache_temp, v])
                 k_cache, v_cache = transpose_fn(torch.cat(cat_k_list, dim=0)), transpose_fn(torch.cat(cat_v_list, dim=0))
                 B, H, Sq, _ = q.shape
                 B, H, Skv, _ = k_cache.shape
-                dllm_block_mask = self.dllm_block_mask(context.block_mask, B, H, Sq, Skv, str(q.device))
+                dllm_block_mask = self.dllm_block_mask(context.seqs, B, H, Sq, Skv, str(q.device))
                 o = self.flex_attention(q, k_cache, v_cache, block_mask=dllm_block_mask).squeeze(0)
                 # o = F.scaled_dot_product_attention(q, k_cache, v_cache, attn_mask=dllm_block_mask, enable_gqa=True).squeeze(0)
             else:

@@ -1,8 +1,10 @@
+import time
+import os
+import csv
 import torch
 import triton
 
 import torch.nn as nn
-import torch.nn.functional as F
 import triton.language as tl
 
 from typing import List
@@ -55,20 +57,21 @@ def store_kvcache(
     assert key.stride(-1) == 1 and value.stride(-1) == 1
     assert key.stride(1) == head_dim and value.stride(1) == head_dim
     assert k_cache.stride(1) == D and v_cache.stride(1) == D
-    
+
     N = slot_mapping.numel() if model_type == 'diffusion_lm' else N
     assert N == slot_mapping.numel()
-    
+
     store_kvcache_kernel[(N,)](
         key, key.stride(0),
         value, value.stride(0),
         k_cache, v_cache, slot_mapping, D
     )
 
+
 def load_kvcache(
     k_cache: torch.Tensor, v_cache: torch.Tensor,
     block_table: torch.Tensor, cache_seqlens):
-    pass 
+    pass
 
 class Attention(nn.Module):
     def __init__(
@@ -98,7 +101,9 @@ class Attention(nn.Module):
         self.flex_attention = torch.compile(
             partial(flex_attention, kernel_options=kernel_options, enable_gqa=True), dynamic=True)
         self._block_mask_cache = {}
-        
+        # CSV file path
+        self.csv_path = "attention_profile.csv"
+
     @lru_cache(maxsize=32)
     def dllm_block_mask(self, block_mask: torch.Tensor, 
                         B: int, H: int, Q_LEN: int, KV_LEN: int, device: str):
@@ -111,24 +116,47 @@ class Attention(nn.Module):
             )
         return self._block_mask_cache[cache_key]
 
-    # TODO: Optimize Diffusion LM Attention !!!
     def forward(self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor,
                 mask: List[torch.Tensor] | None = None) -> torch.Tensor:
-        o: torch.Tensor
+        timings = {
+            "reshape_time": 0,
+            "store_kvcache_time": 0,
+            "attn_time": 0,
+            "split_time": 0,
+            "loadkv_time": 0,
+            "prefill_transpose_time": 0,
+            "loadkv_time_transpose": 0,
+            "maskgen_time": 0,
+            "final_reshape_time": 0,
+            "overall_attention_time": 0
+        }
+        start_all = time.time()
+
+        # Reshape
+        start = time.time()
         q = q.view(-1, self.num_heads, self.head_dim)
         k = k.view(-1, self.num_kv_heads, self.head_dim)
         v = v.view(-1, self.num_kv_heads, self.head_dim)
+        timings['reshape_time'] = time.time() - start
+
         context: ContextForDiffusionLM = get_context_causal_lm() if self.model_type == 'causal_lm' else get_context_diffusion_lm()
         k_cache, v_cache = self.k_cache, self.v_cache
+
+        # Store KV cache
         if k_cache.numel() and v_cache.numel():
-            if self.model_type == 'diffusion_lm' and context.slot_mapping.numel() == 0:
-                pass
-            else:
+            store_start = time.time()
+            if not (self.model_type == 'diffusion_lm' and context.slot_mapping.numel() == 0):
                 store_kvcache(k, v, k_cache, v_cache, context.slot_mapping, self.model_type)
+            timings['store_kvcache_time'] = time.time() - store_start
+
+        # Prefill / Decode logic
         if context.is_prefill:
-            if context.block_tables is not None: # prefix cache
-                if self.model_type == 'causal_lm':
-                    k, v = k_cache, v_cache
+            # Block PK
+            if context.block_tables is not None and self.model_type == 'causal_lm':
+                k, v = k_cache, v_cache
+
+            # Attention computation
+            attn_start = time.time()
             if self.model_type == 'causal_lm':
                 o = flash_attn_varlen_func(
                     q, k, v,
@@ -136,29 +164,37 @@ class Attention(nn.Module):
                     max_seqlen_k=context.max_seqlen_k, cu_seqlens_k=context.cu_seqlens_k,
                     softmax_scale=self.scale, causal=self.causal, block_table=context.block_tables
                 )
-            elif self.model_type == 'diffusion_lm':
-                transpose_fn = lambda x: rearrange(x, 's h d -> h s d').unsqueeze(0)
-                q, k, v = [transpose_fn(tensor) for tensor in (q, k, v)]
-                B, H, S, _ = q.shape
-                dllm_block_mask = self.dllm_block_mask(context.block_mask, B, H, S, S, str(q.device))
-                o = self.flex_attention(q, k, v, block_mask=dllm_block_mask).squeeze(0)
             else:
-                raise ValueError(f"Unsupported model type: {self.model_type}")
-        else: # decode
+                transpose_start = time.time()
+                transpose_fn = lambda x: rearrange(x, 's h d -> h s d').unsqueeze(0)
+                q_t, k_t, v_t = [transpose_fn(t) for t in (q, k, v)]
+                timings['prefill_transpose_time'] = time.time() - transpose_start
+
+                mask_start = time.time()
+                B, H, S, _ = q_t.shape
+                block_mask = self.dllm_block_mask(context.block_mask, B, H, S, S, str(q.device))
+                timings['maskgen_time'] = time.time() - mask_start
+
+                o = self.flex_attention(q_t, k_t, v_t, block_mask=block_mask).squeeze(0)
+            timings['attn_time'] = time.time() - attn_start
+        else:
             if self.model_type == 'causal_lm':
+                decode_start = time.time()
                 o = flash_attn_with_kvcache(
                     q.unsqueeze(1), k_cache, v_cache,
-                    cache_seqlens=context.context_lens, block_table=context.block_tables, 
+                    cache_seqlens=context.context_lens, block_table=context.block_tables,
                     softmax_scale=self.scale, causal=self.causal
                 )
-            elif self.model_type == 'diffusion_lm':
-                
+                timings['decode_time'] = time.time() - decode_start
+            else:
+                split_start = time.time()
                 transpose_fn = lambda x: rearrange(x, 's h d -> h s d').unsqueeze(0)
-                q = transpose_fn(q)
+                q_t = transpose_fn(q)
                 k_list, v_list = [torch.split(tensor, context.seq_split, dim=0) for tensor in (k, v)]
-                cat_k_list = []
-                cat_v_list = []
-                # TODO: Possibly implement parallel loading kernel?
+                timings['split_time'] = time.time() - split_start
+
+                loadkv_start = time.time()
+                cat_k_list, cat_v_list = [], []
                 for seq_idx, (k, v) in enumerate(zip(k_list, v_list)):
                     cur_context_len = context.context_lens[seq_idx]
                     k_cache_temp, v_cache_temp = None, None
@@ -175,19 +211,44 @@ class Attention(nn.Module):
                             else torch.cat((v_cache_temp, v_mem_block[:cur_window]), dim=0)
                     cat_k_list.extend([k_cache_temp, k])
                     cat_v_list.extend([v_cache_temp, v])
-                k_cache, v_cache = transpose_fn(torch.cat(cat_k_list, dim=0)), transpose_fn(torch.cat(cat_v_list, dim=0))
-                B, H, Sq, _ = q.shape
-                B, H, Skv, _ = k_cache.shape
-                dllm_block_mask = self.dllm_block_mask(context.block_mask, B, H, Sq, Skv, str(q.device))
-                o = self.flex_attention(q, k_cache, v_cache, block_mask=dllm_block_mask).squeeze(0)
-                # o = F.scaled_dot_product_attention(q, k_cache, v_cache, attn_mask=dllm_block_mask, enable_gqa=True).squeeze(0)
-            else:
-                raise ValueError(f"Unsupported model type: {self.model_type}")
+                k_comb = torch.cat(cat_k_list, dim=0)
+                v_comb = torch.cat(cat_v_list, dim=0)
+                loadkv_time = time.time() - loadkv_start
+                timings['loadkv_time'] = loadkv_time
+
+                transpose_load_start = time.time()
+                k_t, v_t = transpose_fn(k_comb), transpose_fn(v_comb)
+                timings['loadkv_time_transpose'] = time.time() - transpose_load_start
+
+                mask_start = time.time()
+                B, H, Sq, _ = q_t.shape
+                _, _, Skv, _ = k_t.shape
+                block_mask = self.dllm_block_mask(context.block_mask, B, H, Sq, Skv, str(q.device))
+                timings['maskgen_time'] = time.time() - mask_start
+
+                attn_start = time.time()
+                o = self.flex_attention(q_t, k_t, v_t, block_mask=block_mask).squeeze(0)
+                timings['attn_time'] = time.time() - attn_start
+
+        # Final reshape
+        final_start = time.time()
         if self.model_type == 'causal_lm':
             o = o.view(-1, self.num_heads * self.head_dim)
-        elif self.model_type == 'diffusion_lm':
-            o = rearrange(o, 'h s d -> s (h d)')
         else:
-            raise ValueError(f"Unsupported model type: {self.model_type}")
-        
+            o = rearrange(o, 'h s d -> s (h d)')
+        timings['final_reshape_time'] = time.time() - final_start
+
+        # Overall
+        timings['overall_attention_time'] = time.time() - start_all
+
+        # Write to CSV (ensure header even if file exists)
+        write_header = True
+        if os.path.exists(self.csv_path) and os.path.getsize(self.csv_path) > 0:
+            write_header = False
+        with open(self.csv_path, 'a', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=list(timings.keys()))
+            if write_header:
+                writer.writeheader()
+            writer.writerow(timings)
+
         return o

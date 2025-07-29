@@ -6,6 +6,13 @@
     "configurations": [
         
 
+
+
+
+
+
+        
+
         {
             "name": "PyDbg: `Dream` Accelerate Launch Debug",
             "type": "debugpy",
