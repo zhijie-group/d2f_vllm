@@ -166,7 +166,7 @@ class Attention(nn.Module):
                 )
             else:
                 transpose_start = time.time()
-                transpose_fn = lambda x: rearrange(x, 's h d -> h s d').unsqueeze(0)
+                transpose_fn = lambda x: rearrange(x, 's h d -> 1 h s d')
                 q_t, k_t, v_t = [transpose_fn(t) for t in (q, k, v)]
                 timings['prefill_transpose_time'] = time.time() - transpose_start
 
@@ -175,7 +175,7 @@ class Attention(nn.Module):
                 block_mask = self.dllm_block_mask(context.block_mask, B, H, S, S, str(q.device))
                 timings['maskgen_time'] = time.time() - mask_start
 
-                o = self.flex_attention(q_t, k_t, v_t, block_mask=block_mask).squeeze(0)
+                o = self.flex_attention(q_t, k_t, v_t, block_mask=block_mask)
             timings['attn_time'] = time.time() - attn_start
         else:
             if self.model_type == 'causal_lm':
@@ -188,29 +188,26 @@ class Attention(nn.Module):
                 timings['decode_time'] = time.time() - decode_start
             else:
                 split_start = time.time()
-                transpose_fn = lambda x: rearrange(x, 's h d -> h s d').unsqueeze(0)
+                transpose_fn = lambda x: rearrange(x, 's h d -> 1 h s d')
                 q_t = transpose_fn(q)
                 k_list, v_list = [torch.split(tensor, context.seq_split, dim=0) for tensor in (k, v)]
                 timings['split_time'] = time.time() - split_start
 
                 loadkv_start = time.time()
                 cat_k_list, cat_v_list = [], []
-                for seq_idx, (k, v) in enumerate(zip(k_list, v_list)):
-                    cur_context_len = context.context_lens[seq_idx]
-                    k_cache_temp, v_cache_temp = None, None
-                    for mem_block_idx in context.block_tables[seq_idx]:
-                        if mem_block_idx.item() == -1:
-                            continue
-                        k_mem_block, v_mem_block = k_cache[mem_block_idx], v_cache[mem_block_idx]
-                        mem_block_size = k_cache.shape[1]
-                        cur_window = mem_block_size if mem_block_size <= cur_context_len else cur_context_len % mem_block_size
-                        cur_context_len = cur_context_len - cur_window
-                        k_cache_temp = k_mem_block[:cur_window] if k_cache_temp is None \
-                            else torch.cat((k_cache_temp, k_mem_block[:cur_window]), dim=0)
-                        v_cache_temp = v_mem_block[:cur_window] if v_cache_temp is None \
-                            else torch.cat((v_cache_temp, v_mem_block[:cur_window]), dim=0)
-                    cat_k_list.extend([k_cache_temp, k])
-                    cat_v_list.extend([v_cache_temp, v])
+                for seq_idx, (k_s, v_s) in enumerate(zip(k_list, v_list)):
+                    cur_len = context.context_lens[seq_idx]
+                    k_acc, v_acc = None, None
+                    for block_idx in context.block_tables[seq_idx]:
+                        if block_idx.item() == -1: continue
+                        mem_k = k_cache[block_idx]
+                        mem_v = v_cache[block_idx]
+                        win = min(mem_k.shape[0], cur_len)
+                        cur_len -= win
+                        k_acc = mem_k[:win] if k_acc is None else torch.cat((k_acc, mem_k[:win]), dim=0)
+                        v_acc = mem_v[:win] if v_acc is None else torch.cat((v_acc, mem_v[:win]), dim=0)
+                    cat_k_list.extend([k_acc, k_s])
+                    cat_v_list.extend([v_acc, v_s])
                 k_comb = torch.cat(cat_k_list, dim=0)
                 v_comb = torch.cat(cat_v_list, dim=0)
                 loadkv_time = time.time() - loadkv_start
@@ -227,7 +224,7 @@ class Attention(nn.Module):
                 timings['maskgen_time'] = time.time() - mask_start
 
                 attn_start = time.time()
-                o = self.flex_attention(q_t, k_t, v_t, block_mask=block_mask).squeeze(0)
+                o = self.flex_attention(q_t, k_t, v_t, block_mask=block_mask)
                 timings['attn_time'] = time.time() - attn_start
 
         # Final reshape
@@ -235,7 +232,7 @@ class Attention(nn.Module):
         if self.model_type == 'causal_lm':
             o = o.view(-1, self.num_heads * self.head_dim)
         else:
-            o = rearrange(o, 'h s d -> s (h d)')
+            o = rearrange(o, '1 h s d -> s (h d)')
         timings['final_reshape_time'] = time.time() - final_start
 
         # Overall

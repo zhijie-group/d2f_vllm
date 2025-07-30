@@ -1,10 +1,10 @@
 import csv
-
 import pandas as pd
 
 from transformers import AutoTokenizer
 
 from d2f_vllm import LLM, SamplingParams
+
 
 def summarize_profiling(csv_path: str) -> dict:
     totals = {}
@@ -29,8 +29,8 @@ def summarize_profiling(csv_path: str) -> dict:
             avgs[k] = 0.0
     print(pd.DataFrame([avgs]).T)
 
+
 if __name__ == "__main__":
-    
     model = "/data1/ckpts/Dream-org/Dream-v0-Base-7B"
     llm = LLM(
         model, 
@@ -44,10 +44,9 @@ if __name__ == "__main__":
         complete_threshold=0.95,
         add_new_block_threshold=0.1,
     )
-
+ 
     tokenizer = AutoTokenizer.from_pretrained(model, use_fast=True, trust_remote_code=True)
 
-    # 多个测试问题
     add_template = False
     chat_prompts = [
         '<|beginoftext|>from typing import List\n\n\ndef has_close_elements(numbers: List[float], threshold: float) -> bool:\n    """ Check if in given list of numbers, are any two numbers closer to each other than\n    given threshold.\n    >>> has_close_elements([1.0, 2.0, 3.0], 0.5)\n    False\n    >>> has_close_elements([1.0, 2.8, 3.0, 4.0, 5.0, 2.0], 0.3)\n    True\n    """\n',
@@ -75,17 +74,14 @@ if __name__ == "__main__":
         '<|beginoftext|>from typing import List\n\n\ndef mean_absolute_deviation(numbers: List[float]) -> float:\n    """ For a given list of input numbers, calculate Mean Absolute Deviation\n    around the mean of this dataset.\n    Mean Absolute Deviation is the average absolute difference between each\n    element and a centerpoint (mean in this case):\n    MAD = average | x - x_mean |\n    >>> mean_absolute_deviation([1.0, 2.0, 3.0, 4.0])\n    1.0\n    """\n\n\n'
     ]
 
-    # 利用 tokenizer 构造 chat 模板
     prompts = [
         tokenizer.apply_chat_template(chat, tokenize=False, add_generation_prompt=True) 
         if add_template else tokenizer.encode(chat)
         for chat in chat_prompts
     ]
 
-    # 采样参数设置
     sampling_params = SamplingParams(temperature=0.0, max_tokens=256)
 
-    # 推理
     outputs = llm.generate(prompts, sampling_params)
     print(outputs)
 
