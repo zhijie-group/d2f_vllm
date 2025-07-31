@@ -103,7 +103,7 @@ class Attention(nn.Module):
             partial(flex_attention, kernel_options=kernel_options, enable_gqa=True), dynamic=True)
         self._block_mask_cache = {}
         # CSV file path
-        self.csv_path = "attention_profile.csv"
+        self.csv_path = "log/attention_profile.csv"
 
     @lru_cache(maxsize=32)
     def dllm_block_mask(self, block_mask: torch.Tensor, 

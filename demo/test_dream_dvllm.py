@@ -34,7 +34,7 @@ if __name__ == "__main__":
     model = "/data1/ckpts/Dream-org/Dream-v0-Base-7B"
     llm = LLM(
         model, 
-        lora_path="lora_weight",
+        lora_path="lora_weight/Decoder-ddt_test-20k",
         use_lora=True,
         model_name="dream", 
         model_type="diffusion_lm",
@@ -85,4 +85,4 @@ if __name__ == "__main__":
     outputs = llm.generate(prompts, sampling_params)
     print(outputs)
 
-    summarize_profiling("attention_profile.csv")
+    summarize_profiling("log/attention_profile.csv")
