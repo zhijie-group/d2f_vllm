@@ -391,19 +391,29 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
     def prepare_decode(self, seqs: List[SequenceForDiffusionLM]):
         input_ids = []
         positions = []
+        cu_seqlens_q = [0]
+        cu_seqlens_k = [0]
         slot_mapping = []
         context_lens = []
-        seq_split = []
+        seq_lens = []
         seq_id_to_queue_id = {}
         for seq_idx_in_queue, seq in enumerate(seqs): 
             seq_id = seq.seq_id
             seq_id_to_queue_id[seq_id] = seq_idx_in_queue
             seq.next_diffusion_step()
             temp_input_ids, temp_positions, temp_context_len = seq.diffusion_decoding_inputs()
-            seq_split.append(len(temp_input_ids))
+            
+            seq_lens.append(len(temp_input_ids))
             input_ids.extend(temp_input_ids)
             positions.extend(temp_positions)
             context_lens.append(temp_context_len)
+            
+            total_seqlen = len(seq)
+            seqlen_q = total_seqlen - seq.cached_num_tokens
+            seqlen_k = total_seqlen
+            cu_seqlens_q.append(cu_seqlens_q[-1] + seqlen_q)
+            cu_seqlens_k.append(cu_seqlens_k[-1] + seqlen_k)
+            
             mem_block_to_diffusion_blocks_map = seq.mem_block_to_diffusion_blocks_map
             for mem_block_idx in range(seq.num_cached_blocks, seq.num_prompt_blocks):
                 left_idx = mem_block_idx * seq.block_size
@@ -442,10 +452,16 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
         
         input_ids = torch.tensor(input_ids, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
         positions = torch.tensor(positions, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
+        seq_lens_ts = torch.tensor(seq_lens, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
+        cu_seqlens_q = torch.tensor(cu_seqlens_q, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
+        cu_seqlens_k = torch.tensor(cu_seqlens_k, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
         slot_mapping = torch.tensor(slot_mapping, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
         context_lens = torch.tensor(context_lens, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
         block_tables = self.prepare_block_tables(seqs)
-        set_context_diffusion_lm(False, slot_mapping=slot_mapping, context_lens=context_lens, block_tables=block_tables, seqs=seqs, seq_split=seq_split)
+        set_context_diffusion_lm(False, slot_mapping=slot_mapping, context_lens=context_lens, 
+                                 cu_seqlens_q=cu_seqlens_q, cu_seqlens_k=cu_seqlens_k,
+                                 block_tables=block_tables, seqs=seqs, 
+                                 seq_lens=seq_lens, seq_lens_ts=seq_lens_ts)
         return input_ids, positions
 
     @torch.inference_mode()
@@ -501,7 +517,7 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
             ).next_diffusion_step(is_prefill=True)]
             set_context_diffusion_lm(
                 prefill=False, slot_mapping=slot_mapping[:bs], context_lens=context_lens[:bs], 
-                block_tables=block_tables[:bs], seq_split=[len(seq) for seq in seqs], seqs=seqs)
+                block_tables=block_tables[:bs], seq_lens=[len(seq) for seq in seqs], seqs=seqs)
             outputs[:bs] = self.model(input_ids[:bs], positions[:bs])    # warmup
             with torch.cuda.graph(graph, self.graph_pool):
                 outputs[:bs] = self.model(input_ids[:bs], positions[:bs])    # capture

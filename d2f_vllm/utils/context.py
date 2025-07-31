@@ -49,7 +49,8 @@ def reset_context_causal_lm() -> None:
 @dataclass
 class ContextForDiffusionLM(ContextBase):
     seqs: List[SequenceForDiffusionLM] = None
-    seq_split: List[int] = None
+    seq_lens: List[int] = None
+    seq_lens_ts: torch.Tensor | None = None
     block_mask: torch.Tensor | None = None
     
     def __post_init__(self):
@@ -67,7 +68,7 @@ class ContextForDiffusionLM(ContextBase):
                     start_idx = end_idx
                 self.block_mask = self.block_mask.to(mask.device)
             else:
-                masks = [seq.block_mask[:, :, -self.seq_split[idx]:, :] for idx, seq in enumerate(self.seqs)]
+                masks = [seq.block_mask[:, :, -self.seq_lens[idx]:, :] for idx, seq in enumerate(self.seqs)]
                 total_height = sum(mask.size(-2) for mask in masks)
                 total_width = sum(mask.size(-1) for mask in masks)
                 self.block_mask = torch.zeros(total_height, total_width, dtype=torch.bool)
@@ -97,7 +98,7 @@ def set_context_diffusion_lm(
     cu_seqlens_q=None, cu_seqlens_k=None,
     max_seqlen_q=0, max_seqlen_k=0,
     slot_mapping=None, context_lens=None, block_tables=None,
-    seqs= None, seq_split=None
+    seqs= None, seq_lens=None, seq_lens_ts=None
 ) -> None:
     global _CONTEXT_FOR_DIFFUSION_LM
     _CONTEXT_FOR_DIFFUSION_LM = ContextForDiffusionLM(
@@ -105,7 +106,7 @@ def set_context_diffusion_lm(
         cu_seqlens_q, cu_seqlens_k,
         max_seqlen_q, max_seqlen_k,
         slot_mapping, context_lens, block_tables,
-        seqs, seq_split
+        seqs, seq_lens, seq_lens_ts
     )
 
 def reset_context_diffusion_lm() -> None:

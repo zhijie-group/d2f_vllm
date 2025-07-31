@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.distributed as dist
 
 from d2f_vllm.layers.activation import SiluAndMul
-from d2f_vllm.layers.attention_v1_profile import Attention
+from d2f_vllm.layers.attention.attention_v2_profile import Attention
 from d2f_vllm.layers.layernorm import RMSNorm
 from d2f_vllm.layers.linear import RowParallelLinear, ColumnParallelLinear
 from d2f_vllm.layers.rotary_embedding import get_rope

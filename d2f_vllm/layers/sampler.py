@@ -114,7 +114,7 @@ class SamplerForDream(SamplerForDiffusionLM):
                 top_p=None, top_k=None, margin_confidence=False, neg_entropy=False):
         context = get_context_diffusion_lm()
         seqs = context.seqs
-        split_logits = torch.split(logits, [len(seq) for seq in seqs] if context.is_prefill else context.seq_split, dim=0)
+        split_logits = torch.split(logits, [len(seq) for seq in seqs] if context.is_prefill else context.seq_lens, dim=0)
         accepted_ids_map = {}
         sampled_tokens_map = {}
         true_local_ids_map = {}

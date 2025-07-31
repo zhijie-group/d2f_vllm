@@ -19,7 +19,7 @@ def summarize_profiling(csv_path: str) -> dict:
                 except ValueError:
                     continue
                 if val != 0.0:
-                    total_nums[k] += 1
+                    total_nums[k] = total_nums.get(k, 0) + 1
                 totals[k] = totals.get(k, 0.0) + val
     print(pd.DataFrame([totals]).T)
     for k, v in totals.items():
@@ -34,7 +34,7 @@ if __name__ == "__main__":
     model = "/data1/ckpts/Dream-org/Dream-v0-Base-7B"
     llm = LLM(
         model, 
-        lora_path="/home/jyj/workspace-2/D2F/lora_weight/Decoder-ddt_test-20k",
+        lora_path="lora_weight",
         use_lora=True,
         model_name="dream", 
         model_type="diffusion_lm",
