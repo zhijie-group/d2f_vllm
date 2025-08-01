@@ -51,7 +51,7 @@ class ContextForDiffusionLM(ContextBase):
     seqs: List[SequenceForDiffusionLM] = None
     seq_lens: List[int] = None
     seq_lens_ts: torch.Tensor | None = None
-    block_mask: torch.Tensor | None = None
+    block_mask: List[torch.Tensor] | None = None
     
     def __post_init__(self):
         if self.seqs is not None and len(self.seqs) > 0:
@@ -81,8 +81,6 @@ class ContextForDiffusionLM(ContextBase):
                     self.block_mask[start_row:end_row, start_col:end_col] = mask.clone()
                     start_row, start_col = end_row, end_col
                 self.block_mask = self.block_mask.to(mask.device)
-        else:
-            self.block_mask = None
         
     @property
     def total_num_seqs(self) -> int:

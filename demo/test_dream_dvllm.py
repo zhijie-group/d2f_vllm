@@ -2,6 +2,7 @@ import csv
 import pandas as pd
 
 from transformers import AutoTokenizer
+from viztracer import VizTracer
 
 from d2f_vllm import LLM, SamplingParams
 
@@ -76,13 +77,11 @@ if __name__ == "__main__":
 
     prompts = [
         tokenizer.apply_chat_template(chat, tokenize=False, add_generation_prompt=True) 
-        if add_template else tokenizer.encode(chat)
+        if add_template else chat
         for chat in chat_prompts
     ]
 
     sampling_params = SamplingParams(temperature=0.0, max_tokens=256)
-
+    # with VizTracer(output_file="log/profiles/perf_dvllm_dream.json", file_info=True) as tracer:
     outputs = llm.generate(prompts, sampling_params)
     print(outputs)
-
-    summarize_profiling("log/attention_profile.csv")

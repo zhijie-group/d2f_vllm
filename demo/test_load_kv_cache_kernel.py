@@ -1,6 +1,6 @@
 import torch
 
-from d2f_vllm.layers.attention.attention_v2_profile import load_kvcache_kernel_kv_both
+from d2f_vllm.layers.attention.attention_v2 import load_kvcache_kernel_kv_both
 
 if __name__ == "__main__":
     torch.random.manual_seed(114514)
@@ -51,6 +51,3 @@ if __name__ == "__main__":
         MEM_BLOCK_SIZE=256,
         DIFFUSION_BLOCK_SIZE=32
     )
-    
-    k_output
-    v_output

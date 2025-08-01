@@ -424,7 +424,7 @@ class SequenceForDiffusionLM(SequenceBase):
                 block.to_cache()
             else:
                 break
-        
+    
     def update_block_mask(self, is_prefill: bool = False) -> None:
         if is_prefill:
             num_tokens = self.num_tokens

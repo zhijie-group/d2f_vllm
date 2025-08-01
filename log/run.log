@@ -1,28 +1,0 @@
-LoRA Config Loaded: {'alpha_pattern': {}, 'auto_mapping': {'base_model_class': 'DreamModel', 'parent_library': 'transformers_modules.Dream-v0-Base-7B.modeling_dream'}, 'base_model_name_or_path': '/home/wx/data/model/Dream-org/Dream-v0-Base-7B', 'bias': 'none', 'corda_config': None, 'eva_config': None, 'exclude_modules': None, 'fan_in_fan_out': False, 'inference_mode': True, 'init_lora_weights': True, 'layer_replication': None, 'layers_pattern': None, 'layers_to_transform': None, 'loftq_config': {}, 'lora_alpha': 32, 'lora_bias': False, 'lora_dropout': 0.1, 'megatron_config': None, 'megatron_core': 'megatron.core', 'modules_to_save': None, 'peft_type': 'LORA', 'r': 32, 'rank_pattern': {}, 'revision': None, 'target_modules': ['k_proj', 'v_proj', 'q_proj', 'o_proj'], 'task_type': None, 'trainable_token_indices': None, 'use_dora': False, 'use_rslora': False}
-Loading base model:   0%|          | 0/4 [00:00<?, ?it/s]Loading base model:  25%|██▌       | 1/4 [00:01<00:03,  1.02s/it]Loading base model:  25%|██▌       | 1/4 [00:01<00:03,  1.04s/it]
-[rank0]: Traceback (most recent call last):
-[rank0]:   File "/data1/jyj/D2F/demo/test_dream_dvllm.py", line 35, in <module>
-[rank0]:     llm = LLM(
-[rank0]:           ^^^^
-[rank0]:   File "/data1/jyj/D2F/d2f_vllm/engine/llm_engine.py", line 33, in __init__
-[rank0]:     self.model_runner = AutoModelRunner.from_config(config, 0, self.events)
-[rank0]:                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-[rank0]:   File "/data1/jyj/D2F/d2f_vllm/engine/model_runner.py", line 531, in from_config
-[rank0]:     return ModelRunnerForDiffusionLM(config, rank, event)
-[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-[rank0]:   File "/data1/jyj/D2F/d2f_vllm/engine/model_runner.py", line 331, in __init__
-[rank0]:     super().__init__(config, rank, event)
-[rank0]:   File "/data1/jyj/D2F/d2f_vllm/engine/model_runner.py", line 42, in __init__
-[rank0]:     self.model = AutoModelLM.from_config(config)
-[rank0]:                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-[rank0]:   File "/data1/jyj/D2F/d2f_vllm/models/auto_model.py", line 15, in from_config
-[rank0]:     return load_model(model, config)
-[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^
-[rank0]:   File "/data1/jyj/D2F/d2f_vllm/utils/loader.py", line 71, in load_model
-[rank0]:     weight_loader(param, f.get_tensor(weight_name))
-[rank0]:                          ^^^^^^^^^^^^^^^^^^^^^^^^^
-[rank0]:   File "/data1/jyj/D2F/.venv/lib/python3.12/site-packages/torch/utils/_device.py", line 104, in __torch_function__
-[rank0]:     return func(*args, **kwargs)
-[rank0]:            ^^^^^^^^^^^^^^^^^^^^^
-[rank0]: torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 1.02 GiB. GPU 0 has a total capacity of 39.38 GiB of which 487.81 MiB is free. Process 2634609 has 23.98 GiB memory in use. Including non-PyTorch memory, this process has 14.91 GiB memory in use. Of the allocated memory 14.33 GiB is allocated by PyTorch, and 105.36 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
-[rank0]:[W730 13:14:28.274483634 ProcessGroupNCCL.cpp:1479] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())

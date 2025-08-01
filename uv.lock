@@ -264,6 +264,7 @@ dependencies = [
     { name = "torch" },
     { name = "tqdm" },
     { name = "transformers" },
+    { name = "viztracer" },
 ]
 
 [package.metadata]
@@ -285,6 +286,7 @@ requires-dist = [
     { name = "torch", specifier = ">=2.7.1" },
     { name = "tqdm", specifier = ">=4.67.1" },
     { name = "transformers", specifier = ">=4.53.2" },
+    { name = "viztracer", specifier = ">=1.0.4" },
 ]
 
 [[package]]
@@ -1042,6 +1044,15 @@ dependencies = [
 sdist = { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/3a/99/2836d3bbdbb822db98af7aa9271574b314c7b4a7dade6b869d6dac97d302/nvitop-1.5.2.tar.gz", hash = "sha256:f89025482e37f53a1c04e092a93da363b4fdfec456bc523fe709f74c5a2be41d", size = 220226, upload-time = "2025-07-25T08:12:26.581Z" }
 wheels = [
     { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/6c/b8/85c10dcb143c3967edf45701138a23953e51b9d4898242b37f7783486238/nvitop-1.5.2-py3-none-any.whl", hash = "sha256:3a4263c2a85095cdc61b748bf01943d2b3999ffafc050ca17872ea069a611a48", size = 213824, upload-time = "2025-07-25T08:12:24.118Z" },
+]
+
+[[package]]
+name = "objprint"
+version = "0.3.0"
+source = { registry = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple" }
+sdist = { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/81/b8/c10e96120f1585824a1992655334b49da3924edfb364e84a26cc0ecdb89b/objprint-0.3.0.tar.gz", hash = "sha256:b5d83f9d62db5b95353bb42959106e1cd43010dcaa3eed1ad8d7d0b2df9b2d5a", size = 47481, upload-time = "2024-11-09T00:05:16.73Z" }
+wheels = [
+    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/ec/af/572825252f16f36eeecbc8e3b721913d2640d69b984fdb8907aa8b4b0975/objprint-0.3.0-py3-none-any.whl", hash = "sha256:489083bfc8baf0526f8fd6af74673799511532636f0ce4141133255ded773405", size = 41619, upload-time = "2024-11-09T00:05:14.852Z" },
 ]
 
 [[package]]
@@ -1825,6 +1836,38 @@ source = { registry = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple" }
 sdist = { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/15/22/9ee70a2574a4f4599c47dd506532914ce044817c7752a79b6a51286319bc/urllib3-2.5.0.tar.gz", hash = "sha256:3fc47733c7e419d4bc3f6b3dc2b4f890bb743906a30d56ba4a5bfa4bbff92760", size = 393185, upload-time = "2025-06-18T14:07:41.644Z" }
 wheels = [
     { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/a7/c2/fe1e52489ae3122415c51f387e221dd0773709bad6c6cdaa599e8a2c5185/urllib3-2.5.0-py3-none-any.whl", hash = "sha256:e6b01673c0fa6a13e374b50871808eb3bf7046c4b125b216f6bf1cc604cff0dc", size = 129795, upload-time = "2025-06-18T14:07:40.39Z" },
+]
+
+[[package]]
+name = "viztracer"
+version = "1.0.4"
+source = { registry = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple" }
+dependencies = [
+    { name = "objprint" },
+]
+sdist = { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/f8/11/3e42af9884046efd7c4b08f9e84d4c8b13953ba4761e67e39a95239ed02c/viztracer-1.0.4.tar.gz", hash = "sha256:e8da6faa73d68911d93b676fa2c94bfa20966e23b529e3cbd1c6816f7de83cd7", size = 10213794, upload-time = "2025-05-09T22:38:01.663Z" }
+wheels = [
+    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/ef/8e/76988f93b2807cc7445db17b0cdb77a7327b84570a6825b3bfd43c5cd5e1/viztracer-1.0.4-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:509d7da3e9b11ad22c6ee1e5e6260fdfc7b286fe044d0aa35c4a04b4d43c9459", size = 10266269, upload-time = "2025-05-09T22:38:58.107Z" },
+    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/2a/c3/b334fae1d0d7130df008f574a20111db8cd4a6c4aceee25184c9e7fcd872/viztracer-1.0.4-cp312-cp312-macosx_11_0_x86_64.whl", hash = "sha256:fbd692aaa6b8d9a79ad61666cf256164f744fa476548eca80744d49acd195c3c", size = 10266096, upload-time = "2025-05-09T22:42:21.49Z" },
+    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/89/43/f3a188e71bc4bf1698549b330c872c6cccb76cc054d5ca0b5ea306007ac5/viztracer-1.0.4-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:ca7b15da119c603c12c2d3088b2cbb28514ed09df8f2c463cd231001f7f3d544", size = 10385262, upload-time = "2025-05-09T22:46:34.399Z" },
+    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/02/bf/9fb8e5b71a566a911aa910024a642278af93934ae89345bc73b62caedb59/viztracer-1.0.4-cp312-cp312-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:041f9dfcc9f7f2f062d8d4010177c1fcdd87dc6129ff36f938caaad1038c77e6", size = 10381813, upload-time = "2025-05-09T22:40:38.219Z" },
+    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/27/48/f7c18833434987bd56e53382209c681cec291a1ab97b93227104365dc28c/viztracer-1.0.4-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:06675e00b42049122524af9af32d9a801ea0627d59ba401290b66b510ede667c", size = 10393711, upload-time = "2025-05-09T22:40:42.082Z" },
+    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/ef/24/0f493cfa082dbfda3456fc8df38fb1914e3f8ff5aa724e1a0915cc1d6e94/viztracer-1.0.4-cp312-cp312-win32.whl", hash = "sha256:d2669dac757734a703b5586a03c7419b9047e10b8000c4bf01d4db99844d9d18", size = 10429612, upload-time = "2025-05-09T22:45:55.364Z" },
+    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/b2/ec/f5a00c801d704e23a59422627848ef7862223e70be159350bc6a53ee9f0f/viztracer-1.0.4-cp312-cp312-win_amd64.whl", hash = "sha256:488ebb9ae8c6f6c32327ce463eb578f39854d0738f160b11e9097d3d0082a919", size = 10432342, upload-time = "2025-05-09T22:45:53.205Z" },
+    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/9c/29/54f7f8968e3ecf9bb68c7a43f38f5a3f93abf0de5492a71014545dc50e47/viztracer-1.0.4-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:a5ada91d26cc94216b4904e20464fcd1cf0c5eed156a25d4df4f17b25e2a67b7", size = 10266271, upload-time = "2025-05-09T22:39:00.393Z" },
+    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/c7/ac/d4fe899885c3102b6233673fb4358d5bf894fb389764b964f595a8a0a007/viztracer-1.0.4-cp313-cp313-macosx_11_0_x86_64.whl", hash = "sha256:a0a3147a75de5430f03dd9c51168c027ccc5f1f8498a1538376581ce05f62177", size = 10266136, upload-time = "2025-05-09T22:42:23.318Z" },
+    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/1b/47/5b2542bdff5aef5fb04d4dbdc21f5a743484b3b56b0ec9ac6635af38531b/viztracer-1.0.4-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:6df6f6ddfe17be318c0cd67262cfb9a080724795c2d56c0f1444d09301d043ff", size = 10385239, upload-time = "2025-05-09T22:46:39.11Z" },
+    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/64/c9/91750f7f6884a8dd05ec7837275d7096a1c15dc71f232e03012114ae3d98/viztracer-1.0.4-cp313-cp313-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:8f81ad52841ccc1065c0cc316aab67a6f2d8f873bbe085f4b7ffe245104b89f3", size = 10381630, upload-time = "2025-05-09T22:40:43.89Z" },
+    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/37/b8/47365881b19626d41f6744a9d07b605466476c653d182a781b5bdfc95965/viztracer-1.0.4-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:113e4c87d26b48df2f55030ce16198572a02d415ab177433f9de0d1797654be5", size = 10393701, upload-time = "2025-05-09T22:40:46.175Z" },
+    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/c9/25/860ba15fc94f391bf1da0a2d6eed17f28ac860573346c7ddc7dfdb4c1398/viztracer-1.0.4-cp313-cp313-win32.whl", hash = "sha256:6bf4b9953e73d0c6ff53044f9bf28e7d50c108c6235cf4034785ce672a0181f4", size = 10429618, upload-time = "2025-05-09T22:46:00.028Z" },
+    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/d1/f0/7f831bbc616c26a5cc4ce15df6a8aa441cd1287be84fff996e4613936ccb/viztracer-1.0.4-cp313-cp313-win_amd64.whl", hash = "sha256:d55819382524f3a6cde7cdf2cfa3588dd9d003e94b40bb6f1308c309c8945252", size = 10432230, upload-time = "2025-05-09T22:45:57.499Z" },
+    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/bd/09/116bd5aea3a3d656d0962df2acab5059d16fe14fb4c2fe9b9404bd56044c/viztracer-1.0.4-cp313-cp313t-macosx_11_0_arm64.whl", hash = "sha256:868a8c47e69dbf8b617c978d5b9f10a841aeb613214d59b3a20245e018a7adcb", size = 10268991, upload-time = "2025-05-09T22:39:02.818Z" },
+    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/0a/35/ac0024094fb140691f2e56277e1c1067bb06a529885ce329a4058ac22627/viztracer-1.0.4-cp313-cp313t-macosx_11_0_x86_64.whl", hash = "sha256:4c551c180c9850f03110543a6c25376891223a36dd5ea711835b4e575056a211", size = 10268803, upload-time = "2025-05-09T22:42:25.676Z" },
+    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/fc/ce/e35f6d55db5d92797503025f9651e3788437a9f94fb185b47adb1e13151e/viztracer-1.0.4-cp313-cp313t-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:b9c05d2795fcab1cd65565f556dbc6c674a6d29aac35e1045c6082754ec55818", size = 10433236, upload-time = "2025-05-09T22:46:43.653Z" },
+    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/27/aa/c95d8af7de369cd4bd470747cc7efc9197606a28a7880e044b2d6f78d71d/viztracer-1.0.4-cp313-cp313t-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:71d959b6c84d223476c9b25a4062e19c224b0f548b16f5a88b0eab0c30ec9f96", size = 10424144, upload-time = "2025-05-09T22:40:48.004Z" },
+    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/cc/21/14bf1ad4f7ca51742d06b0ae25573cfbaba73b514c2968b6bfde9a80995c/viztracer-1.0.4-cp313-cp313t-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:012d8dbf8318328c1a82bc459a06609fe11ddb658fb3d7ec1de5c869cad70f26", size = 10435755, upload-time = "2025-05-09T22:40:50.305Z" },
+    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/56/79/09400077ca9c12b9bd91a5d3d8ce717e80b7fc8e6eda1949aadd4e6c6497/viztracer-1.0.4-cp313-cp313t-win32.whl", hash = "sha256:0a8cb36e778daca402286e39c883bbd79e30b20527617b33691d70052ef2a3be", size = 10433596, upload-time = "2025-05-09T22:46:03.599Z" },
+    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/13/c4/ce6ef379cf2050e4a9378b49cdfd76e3b349410fd668c194f6afea82edd1/viztracer-1.0.4-cp313-cp313t-win_amd64.whl", hash = "sha256:b4bf137fdde831f5188c7543946ee7c32615540aea1c6d92131fd5756ccafe9a", size = 10436952, upload-time = "2025-05-09T22:46:01.869Z" },
 ]
 
 [[package]]

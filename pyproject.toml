@@ -22,6 +22,7 @@ dependencies = [
     "torch>=2.7.1",
     "tqdm>=4.67.1",
     "transformers>=4.53.2",
+    "viztracer>=1.0.4",
 ]
 
 [tool.setuptools.packages.find]

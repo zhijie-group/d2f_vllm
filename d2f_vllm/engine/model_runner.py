@@ -194,6 +194,7 @@ class ModelRunnerBase(ABC):
 class ModelRunnerForCausalLM(ModelRunnerBase):
     """Model runner for Causal Language Models."""
     def warmup_model(self):
+        return
         torch.cuda.empty_cache()
         torch.cuda.reset_peak_memory_stats()
         max_num_batched_tokens, max_model_len = self.config.max_num_batched_tokens, self.config.max_model_len

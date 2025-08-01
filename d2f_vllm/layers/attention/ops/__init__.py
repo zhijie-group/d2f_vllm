@@ -1,0 +1,3 @@
+from d2f_vllm.layers.attention.ops.triton_flash_attention import triton_flash_attention as flash_attn_varlen_func
+from d2f_vllm.layers.attention.ops.triton_decode_attn_clm import causal_lm_decode_attention_fwd as causal_lm_flash_attn_with_kvcache
+from d2f_vllm.layers.attention.ops.triton_decode_attn_dlm import diffusion_lm_decode_attention_fwd as diffusion_lm_flash_attn_with_kvcache
