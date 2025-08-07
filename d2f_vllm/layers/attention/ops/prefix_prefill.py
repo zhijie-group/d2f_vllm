@@ -36,7 +36,7 @@ def _fwd_kernel_d2f(Q, K, V, Mask,
                     stride_obs, stride_oh, stride_od,
                     stride_k_cache_bs, stride_k_cache_h, stride_k_cache_d, stride_k_cache_bl: tl.constexpr, stride_k_cache_x,
                     stride_v_cache_bs, stride_v_cache_h, stride_v_cache_d, stride_v_cache_bl,
-                    stride_mask_h, stride_mask_w,
+                    stride_mask_m, stride_mask_n,
                     num_queries_per_kv: tl.constexpr,
                     IN_PRECISION: tl.constexpr,
                     BLOCK_M: tl.constexpr,
@@ -121,6 +121,7 @@ def _fwd_kernel_d2f(Q, K, V, Mask,
         qk = tl.zeros([BLOCK_M, BLOCK_SIZE], dtype=tl.float32)  # [M,N]
         qk = tl.dot(q, k, acc=qk, input_precision=IN_PRECISION)
         qk = tl.where((start_n + offs_bs_n[None, :]) < cur_batch_ctx_len, qk, float("-inf"))
+        
         qk *= sm_scale
         if SLIDING_WINDOW > 0:
             # (cur_batch_ctx_len + offs_m[:, None]) are the positions of
@@ -139,9 +140,9 @@ def _fwd_kernel_d2f(Q, K, V, Mask,
         # compute running maximum
         m_ij = tl.maximum(m_i, tl.max(qk, axis=1))
         p = tl.exp(qk - m_ij[:, None])
-        l_ij = tl.sum(p, axis=1)
+        
         alpha = tl.exp(m_i - m_ij)
-        acc = acc * alpha[:, None]
+        l_ij = alpha * l_i + tl.sum(p, axis=1)
 
         # update acc
         if start_n + BLOCK_SIZE > cur_batch_ctx_len or BLOCK_DMODEL != BLOCK_DMODEL_PADDED:
@@ -157,9 +158,9 @@ def _fwd_kernel_d2f(Q, K, V, Mask,
             v = v_load
         p = p.to(v.dtype)
 
-        acc = tl.dot(p, v, acc=acc, input_precision=IN_PRECISION)
+        acc = acc * alpha[:, None] + tl.dot(p, v, acc=acc, input_precision=IN_PRECISION)
         # # update m_i and l_i
-        l_i = l_i * alpha + l_ij
+        l_i = l_ij
         m_i = m_ij
 
     offs_k = offs_n[None, :] * stride_kbs + cur_kv_head * stride_kh + offs_d[:, None] * stride_kd
@@ -187,7 +188,10 @@ def _fwd_kernel_d2f(Q, K, V, Mask,
         #               float("-inf"))
         
         # TODO apply block-wise causal mask
-        mask = tl.load(Mask + (start_m + offs_m[:, None]) * stride_mask_h + (start_n + offs_n[None, :]) * stride_mask_w)
+        offs_mask = offs_m[:, None] * stride_mask_m + (start_n + offs_n[None, :]) * stride_mask_n
+        mask_ptrs = Mask + offs_mask
+        m_mask = (offs_m[:, None] < cur_batch_query_len) & ((start_n + offs_n[None, :]) < cur_batch_query_len)
+        mask = tl.load(mask_ptrs, mask=m_mask, other=False)
         qk += tl.where(mask, 0.0, float("-inf"))
         if SLIDING_WINDOW > 0:
             qk = tl.where(offs_m[:, None] - (start_n + offs_n[None, :]) < SLIDING_WINDOW, qk, -1e9)

@@ -11,7 +11,7 @@ from d2f_vllm.layers.attention.ops import diffusion_lm_parallel_flash_decoding
 if __name__ == "__main__":
     torch.random.manual_seed(114514)
     
-    num = 2
+    num = 1
     seq_lens = torch.tensor([32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 
                 32, 32, 32, 32, 32, 32, 32, 32, 32, 32]).to(torch.int32).to("cuda")[:num]
     seq_lens = seq_lens * 2
@@ -77,7 +77,7 @@ if __name__ == "__main__":
         )
     
     temp_o = o[:64]
-    k_cache = rearrange(k_cache, "b h n s x -> b s h (n x)", n=k.shape[-1]//x, x=x).contiguous()
+    k_cache = rearrange(k_cache, "b h n s x -> b s h (n x)").contiguous()
     v_cache = rearrange(v_cache, "b h d s -> b s h d").contiguous()
     rearrange_fn = lambda ts: rearrange(ts, 's h d -> 1 h s d').contiguous()
     k_in = rearrange_fn(torch.cat([k_cache[0][:119], k[:64]]))
