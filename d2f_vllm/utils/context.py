@@ -19,7 +19,8 @@ class ContextBase:
 # Global context for causal language model
 @dataclass
 class ContextForCausalLM(ContextBase):
-    pass
+    kv_cache_layout: str = "unified"  # Only "unified" is supported for Causal LM currently
+    need_kv_cache_store: bool = True
 
 _CONTEXT_FOR_CAUSAL_LM = ContextForCausalLM()
 
@@ -51,12 +52,16 @@ class ContextForDiffusionLM(ContextBase):
     seqs: List[SequenceForDiffusionLM] = None
     seq_lens: List[int] = None
     seq_lens_ts: torch.Tensor | None = None
+    kv_cache_layout: str = "unified"  # "unified" or "distinct"
+    need_kv_cache_store: bool = True
     block_mask: List[torch.Tensor] | None = None
     
     def __post_init__(self):
+        if self.seq_lens_ts is not None and self.context_lens is not None:
+            self.total_lens = self.seq_lens_ts + self.context_lens
         if self.seqs is not None and len(self.seqs) > 0:
             if self.is_prefill:
-                masks = [seq.block_mask for seq in self.seqs]
+                masks = [seq.current_block_mask for seq in self.seqs]
                 total_len = sum(mask.size(-1) for mask in masks)
                 self.block_mask = torch.zeros(total_len, total_len, dtype=torch.bool)
                 
@@ -68,7 +73,7 @@ class ContextForDiffusionLM(ContextBase):
                     start_idx = end_idx
                 self.block_mask = self.block_mask.to(mask.device)
             else:
-                masks = [seq.block_mask[:, :, -self.seq_lens[idx]:, :] for idx, seq in enumerate(self.seqs)]
+                masks = [seq.current_block_mask for seq in self.seqs]
                 total_height = sum(mask.size(-2) for mask in masks)
                 total_width = sum(mask.size(-1) for mask in masks)
                 self.block_mask = torch.zeros(total_height, total_width, dtype=torch.bool)
@@ -96,7 +101,7 @@ def set_context_diffusion_lm(
     cu_seqlens_q=None, cu_seqlens_k=None,
     max_seqlen_q=0, max_seqlen_k=0,
     slot_mapping=None, context_lens=None, block_tables=None,
-    seqs= None, seq_lens=None, seq_lens_ts=None
+    seqs= None, seq_lens=None, seq_lens_ts=None, kv_cache_layout="unified", need_kv_cache_store=True
 ) -> None:
     global _CONTEXT_FOR_DIFFUSION_LM
     _CONTEXT_FOR_DIFFUSION_LM = ContextForDiffusionLM(
@@ -104,7 +109,7 @@ def set_context_diffusion_lm(
         cu_seqlens_q, cu_seqlens_k,
         max_seqlen_q, max_seqlen_k,
         slot_mapping, context_lens, block_tables,
-        seqs, seq_lens, seq_lens_ts
+        seqs, seq_lens, seq_lens_ts, kv_cache_layout, need_kv_cache_store
     )
 
 def reset_context_diffusion_lm() -> None:

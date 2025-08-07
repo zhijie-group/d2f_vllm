@@ -122,7 +122,7 @@ class SamplerForDream(SamplerForDiffusionLM):
             true_local_ids_sub_map = {}
             accepted_ids_sub_map = {}
             sampled_tokens_sub_map = {}
-            shifted_logits = self._shift_logits(seq_logits, seq.cached_last_token_id)
+            shifted_logits = self._shift_logits(seq_logits, seq.cached_or_caching_last_token_id)
             for block_id, block in enumerate(seq.diffusion_blocks):
                 if not block.is_active or sum(block.local_mask_tokens) == 0:
                     continue

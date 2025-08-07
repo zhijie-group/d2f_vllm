@@ -52,7 +52,7 @@ class SequenceBase:
 
     @property
     def num_cached_blocks(self) -> int:
-        return self.num_cached_tokens // self.block_size
+        return (self.num_cached_tokens + self.block_size - 1) // self.block_size
 
     @property
     def num_blocks(self) -> int:
@@ -189,7 +189,7 @@ class DiffusionBlock:
         return [mask_token_id + offset for mask_token_id in self.local_mask_token_ids]
     
     @property
-    def left_length(self) -> int:
+    def remaining_length(self) -> int:
         return self.size - self.cursor
         
     def to_cache(self) -> None:
@@ -346,7 +346,7 @@ class SequenceForDiffusionLM(SequenceBase):
         return self.input_num_prompt_tokens - (self.num_prompt_blocks - 1) * self.block_size
     
     @property
-    def updated_kv_cache_blocks(self) -> List[int]:
+    def updated_or_updating_kv_cache_block_ids(self) -> List[int]:
         return [idx for idx, caching in enumerate(self.caching_blocks) if caching]
 
     @property
@@ -362,16 +362,28 @@ class SequenceForDiffusionLM(SequenceBase):
         return [token_id == self.mask_token_id for token_id in self.token_ids]
     
     @property
-    def cached_last_token_id(self) -> int:
+    def caching_num_tokens(self) -> int:
+        return sum(block.size for block in self.diffusion_blocks if block.is_to_cache)
+    
+    @property
+    def cached_or_caching_last_token_id(self) -> int:
         cached_num_tokens = 0
-        for block_id in self.updated_kv_cache_blocks:
+        for block_id in self.updated_or_updating_kv_cache_block_ids:
             block = self.diffusion_blocks[block_id]
             cached_num_tokens += block.size
         return cached_num_tokens - 1
     
     @property
+    def cached_or_caching_num_tokens(self) -> int:
+        return self.cached_or_caching_last_token_id + 1
+    
+    @property
+    def caching_num_tokens(self) -> int:
+        return sum(block.size for block in self.diffusion_blocks if block.is_in_cache)
+    
+    @property
     def cached_num_tokens(self) -> int:
-        return self.cached_last_token_id + 1
+        return sum(block.size for block in self.diffusion_blocks if block.is_in_cache)
     
     @property
     def diffusion_num_tokens(self) -> int:
@@ -424,6 +436,10 @@ class SequenceForDiffusionLM(SequenceBase):
                 block.to_cache()
             else:
                 break
+    
+    @property
+    def current_block_mask(self) -> torch.Tensor:
+        return self.block_mask[..., self.cached_num_tokens:, self.cached_num_tokens:]
     
     def update_block_mask(self, is_prefill: bool = False) -> None:
         if is_prefill:

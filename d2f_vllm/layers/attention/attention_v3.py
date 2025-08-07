@@ -10,7 +10,7 @@ from einops import rearrange
 from torch.nn.attention.flex_attention import flex_attention, create_block_mask
 from flash_attn import flash_attn_with_kvcache
 
-from d2f_vllm.layers.attention.ops import causal_lm_flash_attn_with_kvcache
+from d2f_vllm.layers.attention.ops import causal_lm_flash_decoding
 from d2f_vllm.utils.context import ContextForDiffusionLM, get_context_causal_lm, get_context_diffusion_lm
 
 
@@ -287,7 +287,7 @@ class Attention(nn.Module):
             o = self.prefill_attention(q_t, k_t, v_t, block_mask=block_mask)
         else:
             if self.model_type == 'causal_lm':
-                o = causal_lm_flash_attn_with_kvcache(
+                o = causal_lm_flash_decoding(
                     q, k_cache, v_cache,
                     cache_seqlens=context.context_lens, block_tables=context.block_tables, 
                     softmax_scale=self.scale, page_size=256

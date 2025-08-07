@@ -32,6 +32,7 @@ Memory-efficient attention for decoding.
 It supports page size >= 1.
 """
 
+import torch
 import logging
 
 from vllm.platforms import current_platform
@@ -57,14 +58,14 @@ def tanh(x):
 
 @triton.jit
 def _fwd_kernel_stage1(
-    Q,
-    K_Buffer,
-    V_Buffer,
-    sm_scale,
-    Req_to_tokens,
-    B_Seqlen,
-    Att_Out,
-    stride_req_to_tokens_b,
+    q,
+    k_cache,
+    v_cache,
+    softmax_scale,
+    block_tables,
+    cache_seqlens,
+    attn_logits,
+    stride_block_tables_b,
     stride_qbs,
     stride_qh,
     stride_buf_kbs,
@@ -94,11 +95,11 @@ def _fwd_kernel_stage1(
     offs_dv = tl.arange(0, BLOCK_DV)
     mask_d = offs_d < Lk
     mask_dv = offs_dv < Lv
-    cur_batch_seq_len = tl.load(B_Seqlen + cur_batch)
+    cur_batch_seq_len = tl.load(cache_seqlens + cur_batch)
     cur_batch_req_idx = cur_batch
 
     off_q = cur_batch * stride_qbs + cur_head * stride_qh + offs_d
-    q = tl.load(Q + off_q, mask=mask_d, other=0.0)
+    q_vec = tl.load(q + off_q, mask=mask_d, other=0.0)
 
     kv_len_per_split = tl.cdiv(cur_batch_seq_len, NUM_KV_SPLITS)
     split_kv_start = kv_len_per_split * split_kv_id
@@ -113,7 +114,7 @@ def _fwd_kernel_stage1(
         for start_n in range(split_kv_start, split_kv_end, BLOCK_N):
             offs_n = start_n + tl.arange(0, BLOCK_N)
             kv_page_number = tl.load(
-                Req_to_tokens + stride_req_to_tokens_b * cur_batch_req_idx +
+                block_tables + stride_block_tables_b * cur_batch_req_idx +
                 offs_n // PAGE_SIZE,
                 mask=offs_n < split_kv_end,
                 other=0,
@@ -122,12 +123,12 @@ def _fwd_kernel_stage1(
             offs_buf_k = (kv_loc[:, None] * stride_buf_kbs +
                           cur_kv_head * stride_buf_kh + offs_d[None, :])
             k = tl.load(
-                K_Buffer + offs_buf_k,
+                k_cache + offs_buf_k,
                 mask=(offs_n[:, None] < split_kv_end) & (mask_d[None, :]),
                 other=0.0,
             )
-            qk = tl.sum(q[None, :] * k, 1)
-            qk *= sm_scale
+            qk = tl.sum(q_vec[None, :] * k, 1)
+            qk *= softmax_scale
 
             if logit_cap > 0:
                 qk = logit_cap * tanh(qk / logit_cap)
@@ -137,7 +138,7 @@ def _fwd_kernel_stage1(
             offs_buf_v = (kv_loc[:, None] * stride_buf_vbs +
                           cur_kv_head * stride_buf_vh + offs_dv[None, :])
             v = tl.load(
-                V_Buffer + offs_buf_v,
+                v_cache + offs_buf_v,
                 mask=(offs_n[:, None] < split_kv_end) & (mask_dv[None, :]),
                 other=0.0,
             )
@@ -155,7 +156,7 @@ def _fwd_kernel_stage1(
                       split_kv_id * stride_mid_os + offs_dv)
 
         tl.store(
-            Att_Out + offs_mid_o,
+            attn_logits + offs_mid_o,
             acc / e_sum,
             mask=(mask_dv),
         )
@@ -164,33 +165,33 @@ def _fwd_kernel_stage1(
                         split_kv_id * stride_mid_os + Lv)
 
         tl.store(
-            Att_Out + offs_mid_o_1,
+            attn_logits + offs_mid_o_1,
             e_max + tl.log(e_sum),
         )
 
 
 def _decode_attn_m_fwd(
     q,
-    k_buffer,
-    v_buffer,
-    att_out,
-    Req_to_tokens,
-    B_Seqlen,
+    k_cache,
+    v_cache,
+    attn_logits,
+    block_tables,
+    cache_seqlens,
     num_kv_splits,
-    sm_scale,
+    softmax_scale,
     page_size,
     logit_cap,
 ):
     BLOCK = 64 if not is_hip_ else 8
 
     NUM_KV_SPLITS = num_kv_splits
-    Lk = k_buffer.shape[-1]
-    Lv = v_buffer.shape[-1]
+    Lk = k_cache.shape[-1]
+    Lv = v_cache.shape[-1]
 
     batch, head_num = q.shape[0], q.shape[1]
 
     grid = (batch, head_num, NUM_KV_SPLITS)
-    kv_group_num = q.shape[1] // k_buffer.shape[-2]
+    kv_group_num = q.shape[1] // k_cache.shape[-2]
 
     num_warps = 4
     if kv_group_num != 1:
@@ -201,22 +202,22 @@ def _decode_attn_m_fwd(
 
     _fwd_kernel_stage1[grid](
         q,
-        k_buffer,
-        v_buffer,
-        sm_scale,
-        Req_to_tokens,
-        B_Seqlen,
-        att_out,
-        Req_to_tokens.stride(0),
+        k_cache,
+        v_cache,
+        softmax_scale,
+        block_tables,
+        cache_seqlens,
+        attn_logits,
+        block_tables.stride(0),
         q.stride(0),
         q.stride(1),
-        k_buffer.stride(-3),  # Assume (..., PAGE_SIZE, NUM_HEADS, HEAD_DIM)
-        k_buffer.stride(-2),  # Assume (..., PAGE_SIZE, NUM_HEADS, HEAD_DIM)
-        v_buffer.stride(-3),  # Assume (..., PAGE_SIZE, NUM_HEADS, HEAD_DIM)
-        v_buffer.stride(-2),  # Assume (..., PAGE_SIZE, NUM_HEADS, HEAD_DIM)
-        att_out.stride(0),
-        att_out.stride(1),
-        att_out.stride(2),
+        k_cache.stride(-3),  # Assume (..., PAGE_SIZE, NUM_HEADS, HEAD_DIM)
+        k_cache.stride(-2),  # Assume (..., PAGE_SIZE, NUM_HEADS, HEAD_DIM)
+        v_cache.stride(-3),  # Assume (..., PAGE_SIZE, NUM_HEADS, HEAD_DIM)
+        v_cache.stride(-2),  # Assume (..., PAGE_SIZE, NUM_HEADS, HEAD_DIM)
+        attn_logits.stride(0),
+        attn_logits.stride(1),
+        attn_logits.stride(2),
         kv_group_num=kv_group_num,
         BLOCK_DMODEL=BLOCK_DMODEL,
         BLOCK_DV=BLOCK_DV,
@@ -233,14 +234,14 @@ def _decode_attn_m_fwd(
 
 @triton.jit
 def _fwd_grouped_kernel_stage1(
-    Q,
-    K_Buffer,
-    V_Buffer,
-    sm_scale,
-    Req_to_tokens,
-    B_Seqlen,
-    Att_Out,
-    stride_req_to_tokens_b,
+    q,
+    k_cache,
+    v_cache,
+    softmax_scale,
+    block_tables,
+    cache_seqlens,
+    attn_logits,
+    stride_block_tables_b,
     stride_qbs,
     stride_qh,
     stride_buf_kbs,
@@ -280,28 +281,21 @@ def _fwd_grouped_kernel_stage1(
     offs_dv = tl.arange(0, BLOCK_DV)
     mask_d = offs_d < Lk
     mask_dv = offs_dv < Lv
-    cur_batch_seq_len = tl.load(B_Seqlen + cur_batch)
+    cur_batch_seq_len = tl.load(cache_seqlens + cur_batch)
     cur_batch_req_idx = cur_batch
 
-    offs_q = cur_batch * stride_qbs + cur_head[:, None] * stride_qh + offs_d[
-        None, :]
-    q = tl.load(Q + offs_q,
-                mask=(mask_h[:, None]) & (mask_d[None, :]),
-                other=0.0)
+    offs_q = cur_batch * stride_qbs + cur_head[:, None] * stride_qh + offs_d[None, :]
+    q_vec = tl.load(q + offs_q, mask=(mask_h[:, None]) & (mask_d[None, :]), other=0.0)
 
     if BLOCK_DPE > 0:
         offs_dpe = BLOCK_DMODEL + tl.arange(0, BLOCK_DPE)
         mask_dpe = offs_dpe < Lk
-        off_qpe = (cur_batch * stride_qbs + cur_head[:, None] * stride_qh +
-                   offs_dpe[None, :])
-        qpe = tl.load(Q + off_qpe,
-                      mask=(mask_h[:, None]) & (mask_dpe[None, :]),
-                      other=0.0)
+        off_qpe = (cur_batch * stride_qbs + cur_head[:, None] * stride_qh + offs_dpe[None, :])
+        qpe = tl.load(q + off_qpe, mask=(mask_h[:, None]) & (mask_dpe[None, :]), other=0.0)
 
     kv_len_per_split = tl.cdiv(cur_batch_seq_len, NUM_KV_SPLITS)
     split_kv_start = kv_len_per_split * split_kv_id
-    split_kv_end = tl.minimum(split_kv_start + kv_len_per_split,
-                              cur_batch_seq_len)
+    split_kv_end = tl.minimum(split_kv_start + kv_len_per_split, cur_batch_seq_len)
 
     e_max = tl.zeros([BLOCK_H], dtype=tl.float32) - float("inf")
     e_sum = tl.zeros([BLOCK_H], dtype=tl.float32)
@@ -311,32 +305,29 @@ def _fwd_grouped_kernel_stage1(
         for start_n in range(split_kv_start, split_kv_end, BLOCK_N):
             offs_n = start_n + tl.arange(0, BLOCK_N)
             kv_page_number = tl.load(
-                Req_to_tokens + stride_req_to_tokens_b * cur_batch_req_idx +
+                block_tables + stride_block_tables_b * cur_batch_req_idx +
                 offs_n // PAGE_SIZE,
                 mask=offs_n < split_kv_end,
                 other=0,
             )
             kv_loc = kv_page_number * PAGE_SIZE + offs_n % PAGE_SIZE
-            offs_buf_k = (kv_loc[None, :] * stride_buf_kbs +
-                          cur_kv_head * stride_buf_kh + offs_d[:, None])
+            offs_buf_k = (kv_loc[None, :] * stride_buf_kbs + cur_kv_head * stride_buf_kh + offs_d[:, None])
             k = tl.load(
-                K_Buffer + offs_buf_k,
+                k_cache + offs_buf_k,
                 mask=(offs_n[None, :] < split_kv_end) & (mask_d[:, None]),
                 other=0.0,
             )
-            qk = tl.dot(q, k.to(q.dtype))
+            qk = tl.dot(q_vec, k.to(q_vec.dtype))
             if BLOCK_DPE > 0:
-                offs_buf_kpe = (kv_loc[None, :] * stride_buf_kbs +
-                                cur_kv_head * stride_buf_kh +
-                                offs_dpe[:, None])
+                offs_buf_kpe = (kv_loc[None, :] * stride_buf_kbs + cur_kv_head * stride_buf_kh + offs_dpe[:, None])
                 kpe = tl.load(
-                    K_Buffer + offs_buf_kpe,
+                    k_cache + offs_buf_kpe,
                     mask=(offs_n[None, :] < split_kv_end) &
                     (mask_dpe[:, None]),
                     other=0.0,
                 )
                 qk += tl.dot(qpe, kpe.to(qpe.dtype))
-            qk *= sm_scale
+            qk *= softmax_scale
 
             if logit_cap > 0:
                 qk = logit_cap * tanh(qk / logit_cap)
@@ -347,7 +338,7 @@ def _fwd_grouped_kernel_stage1(
             offs_buf_v = (kv_loc[:, None] * stride_buf_vbs +
                           cur_kv_head * stride_buf_vh + offs_dv[None, :])
             v = tl.load(
-                V_Buffer + offs_buf_v,
+                v_cache + offs_buf_v,
                 mask=(offs_n[:, None] < split_kv_end) & (mask_dv[None, :]),
                 other=0.0,
             )
@@ -366,7 +357,7 @@ def _fwd_grouped_kernel_stage1(
                       split_kv_id * stride_mid_os + offs_dv[None, :])
 
         tl.store(
-            Att_Out + offs_mid_o,
+            attn_logits + offs_mid_o,
             acc / e_sum[:, None],
             mask=(mask_h[:, None]) & (mask_dv[None, :]),
         )
@@ -375,7 +366,7 @@ def _fwd_grouped_kernel_stage1(
                         split_kv_id * stride_mid_os + Lv)
 
         tl.store(
-            Att_Out + offs_mid_o_1,
+            attn_logits + offs_mid_o_1,
             e_max + tl.log(e_sum),
             mask=mask_h,
         )
@@ -385,11 +376,12 @@ def _decode_grouped_attn_m_fwd(
     q,
     k_cache,
     v_cache,
-    attn_out,
-    Req_to_tokens,
-    B_Seqlen,
+    attn_logits,
+    block_tables,
+    cache_seqlens,
+    diffusion_blk_sz,
     num_kv_splits,
-    sm_scale,
+    softmax_scale,
     page_size,
     logit_cap,
 ):
@@ -397,7 +389,6 @@ def _decode_grouped_attn_m_fwd(
     Lk = k_cache.shape[-1]
     Lv = v_cache.shape[-1]
 
-    # [TODO] work around shmem limit on MI3xx
     if is_hip_ and Lk >= 576:
         BLOCK = 16
 
@@ -412,13 +403,15 @@ def _decode_grouped_attn_m_fwd(
         BLOCK_DPE = 0
     BLOCK_DV = triton.next_power_of_2(Lv)
 
-    batch, head_num = q.shape[0], q.shape[1]
+    num_tokens, head_num = q.shape[0], q.shape[1]
     kv_group_num = q.shape[1] // k_cache.shape[-2]
+    batch_size = num_tokens // diffusion_blk_sz
 
     BLOCK_H = 16
     NUM_KV_SPLITS = num_kv_splits
+    
     grid = (
-        batch,
+        batch_size,
         triton.cdiv(head_num, min(BLOCK_H, kv_group_num)),
         NUM_KV_SPLITS,
     )
@@ -426,8 +419,6 @@ def _decode_grouped_attn_m_fwd(
     extra_kargs = {}
     num_stages = 2
     if is_hip_:
-        # https://rocm.docs.amd.com/en/latest/how-to/rocm-for-ai/inference-optimization/workload.html#mi300x-triton-kernel-performance-optimization
-        # https://github.com/triton-lang/triton/blob/main/third_party/amd/backend/compiler.py
         extra_kargs = {
             "waves_per_eu": 1,
             "matrix_instr_nonkdim": 16,
@@ -439,20 +430,20 @@ def _decode_grouped_attn_m_fwd(
         q,
         k_cache,
         v_cache,
-        sm_scale,
-        Req_to_tokens,
-        B_Seqlen,
-        attn_out,
-        Req_to_tokens.stride(0),
+        softmax_scale,
+        block_tables,
+        cache_seqlens,
+        attn_logits,
+        block_tables.stride(0),
         q.stride(0),
         q.stride(1),
         k_cache.stride(-3),  # Assume (..., PAGE_SIZE, NUM_HEADS, HEAD_DIM)
         k_cache.stride(-2),  # Assume (..., PAGE_SIZE, NUM_HEADS, HEAD_DIM)
         v_cache.stride(-3),  # Assume (..., PAGE_SIZE, NUM_HEADS, HEAD_DIM)
         v_cache.stride(-2),  # Assume (..., PAGE_SIZE, NUM_HEADS, HEAD_DIM)
-        attn_out.stride(0),
-        attn_out.stride(1),
-        attn_out.stride(2),
+        attn_logits.stride(0),
+        attn_logits.stride(1),
+        attn_logits.stride(2),
         kv_group_num=kv_group_num,
         q_head_num=head_num,
         BLOCK_DMODEL=BLOCK_DMODEL,
@@ -473,9 +464,9 @@ def _decode_grouped_attn_m_fwd(
 
 @triton.jit
 def _fwd_kernel_stage2(
-    Mid_O,
+    attn_logits,
     o,
-    B_Seqlen,
+    cache_seqlens,
     stride_mid_ob,
     stride_mid_oh,
     stride_mid_os,
@@ -488,7 +479,7 @@ def _fwd_kernel_stage2(
     cur_batch = tl.program_id(0)
     cur_head = tl.program_id(1)
 
-    cur_batch_seq_len = tl.load(B_Seqlen + cur_batch)
+    cur_batch_seq_len = tl.load(cache_seqlens + cur_batch)
 
     offs_d = tl.arange(0, BLOCK_DV)
     mask_d = offs_d < Lv
@@ -507,10 +498,10 @@ def _fwd_kernel_stage2(
                                   cur_batch_seq_len)
 
         if split_kv_end > split_kv_start:
-            tv = tl.load(Mid_O + offs_v + split_kv_id * stride_mid_os,
+            tv = tl.load(attn_logits + offs_v + split_kv_id * stride_mid_os,
                          mask=mask_d,
                          other=0.0)
-            tlogic = tl.load(Mid_O + offs_logic + split_kv_id * stride_mid_os)
+            tlogic = tl.load(attn_logits + offs_logic + split_kv_id * stride_mid_os)
             n_e_max = tl.maximum(tlogic, e_max)
 
             old_scale = tl.exp(e_max - n_e_max)
@@ -529,15 +520,15 @@ def _fwd_kernel_stage2(
 
 
 def _decode_softmax_reducev_fwd(
-    logits,
+    attn_logits,
     q,
     o,
-    v_buffer,
-    b_seq_len,
+    v_cache,
+    cache_seqlens,
     num_kv_splits,
 ):
     batch, head_num = q.shape[0], q.shape[1]
-    Lv = v_buffer.shape[-1]
+    Lv = v_cache.shape[-1]
     BLOCK_DV = triton.next_power_of_2(Lv)
 
     NUM_KV_SPLITS = num_kv_splits
@@ -554,12 +545,12 @@ def _decode_softmax_reducev_fwd(
 
     grid = (batch, head_num)
     _fwd_kernel_stage2[grid](
-        logits,
+        attn_logits,
         o,
-        b_seq_len,
-        logits.stride(0),
-        logits.stride(1),
-        logits.stride(2),
+        cache_seqlens,
+        attn_logits.stride(0),
+        attn_logits.stride(1),
+        attn_logits.stride(2),
         o.stride(0),
         o.stride(1),
         NUM_KV_SPLITS=NUM_KV_SPLITS,
@@ -573,30 +564,30 @@ def _decode_softmax_reducev_fwd(
 
 def decode_attention_fwd_normal(
     q,
-    k_buffer,
-    v_buffer,
+    k_cache,
+    v_cache,
     o,
-    req_to_token,
-    b_seq_len,
+    block_tables,
+    cache_seqlens,
     attn_logits,
     num_kv_splits,
-    sm_scale,
+    softmax_scale,
     page_size,
     logit_cap=0.0,
 ):
     _decode_attn_m_fwd(
         q,
-        k_buffer,
-        v_buffer,
+        k_cache,
+        v_cache,
         attn_logits,
-        req_to_token,
-        b_seq_len,
+        block_tables,
+        cache_seqlens,
         num_kv_splits,
-        sm_scale,
+        softmax_scale,
         page_size,
         logit_cap,
     )
-    _decode_softmax_reducev_fwd(attn_logits, q, o, v_buffer, b_seq_len,
+    _decode_softmax_reducev_fwd(attn_logits, q, o, v_cache, cache_seqlens,
                                 num_kv_splits)
 
 
@@ -605,8 +596,9 @@ def decode_attention_fwd_grouped(
     k_cache,
     v_cache,
     o,
-    req_to_token,
-    b_seq_len,
+    block_tables,
+    cache_seqlens,
+    diffusion_blk_sz,
     attn_logits,
     num_kv_splits,
     softmax_scale,
@@ -618,27 +610,35 @@ def decode_attention_fwd_grouped(
         k_cache,
         v_cache,
         attn_logits,
-        req_to_token,
-        b_seq_len,
+        block_tables,
+        cache_seqlens,
+        diffusion_blk_sz,
         num_kv_splits,
         softmax_scale,
         page_size,
         logit_cap,
     )
-    _decode_softmax_reducev_fwd(attn_logits, q, o, v_cache, b_seq_len,
-                                num_kv_splits)
+    _decode_softmax_reducev_fwd(
+        attn_logits, 
+        q, 
+        o, 
+        v_cache, 
+        cache_seqlens, 
+        num_kv_splits
+    )
 
 
 def diffusion_lm_decode_attention_fwd(
     q,
     k_cache,
     v_cache,
-    o,
     block_tables,
-    b_seq_len,
-    attn_logits,
-    num_kv_splits,
-    softmax_scale,
+    cache_seqlens,
+    diffusion_blk_sz,
+    o=None,
+    attn_logits=None,
+    softmax_scale=None,
+    num_kv_splits=1,
     page_size=1,
     logit_cap=0.0,
 ):
@@ -656,10 +656,14 @@ def diffusion_lm_decode_attention_fwd(
            Will store the computed attention output.
         block_tables: Token mapping tensor that maps request indices to token positions
                      in the paged memory layout. Shape [batch_size, max_seq_len // page_size].
-        b_seq_len: Batch sequence lengths tensor of shape [batch_size].
+        cache_seqlens: Batch sequence lengths tensor of shape [batch_size].
                   Contains the actual sequence length for each batch item.
         attn_logits: Intermediate attention logits tensor used for computation splits.
                     Shape [batch_size, num_heads, num_kv_splits, head_dim + 1].
+                    The extra "+1" dimension stores log-sum-exp values (e_max + log(e_sum)) 
+                    at index head_dim, while indices 0:head_dim store the attention outputs 
+                    for each split. This is needed for numerically stable softmax reduction 
+                    across splits in the second stage.
         num_kv_splits: Number of splits for KV cache processing to manage memory usage.
                       Higher values reduce memory but may increase computation overhead.
         softmax_scale: Scaling factor applied to attention scores before softmax.
@@ -669,9 +673,14 @@ def diffusion_lm_decode_attention_fwd(
         logit_cap: Optional logit capping value. If > 0, applies tanh-based capping to
                   attention logits to prevent overflow. Default is 0.0 (no capping).
     """
-    assert num_kv_splits == attn_logits.shape[2]
     kv_group_num = q.shape[1] // v_cache.shape[-2]
-
+    
+    o = o if o is not None else torch.empty_like(q).to(q.device, q.dtype)
+    batch_size, num_heads, head_dim = q.shape # In CausalLM: batch_size = num_seqs
+    attn_logits_shape = (batch_size, num_heads, num_kv_splits, head_dim + 1)
+    attn_logits = attn_logits if attn_logits is not None else torch.empty(attn_logits_shape).to(q.device, q.dtype)
+    softmax_scale = q.shape[-1] ** (-0.5) if softmax_scale is None else softmax_scale
+    assert num_kv_splits == attn_logits.shape[2]
     if kv_group_num == 1:
         # MHA
         decode_attention_fwd_normal(
@@ -680,7 +689,7 @@ def diffusion_lm_decode_attention_fwd(
             v_cache,
             o,
             block_tables,
-            b_seq_len,
+            cache_seqlens,
             attn_logits,
             num_kv_splits,
             softmax_scale,
@@ -695,10 +704,12 @@ def diffusion_lm_decode_attention_fwd(
             v_cache,
             o,
             block_tables,
-            b_seq_len,
+            cache_seqlens,
+            diffusion_blk_sz,
             attn_logits,
             num_kv_splits,
             softmax_scale,
             page_size,
             logit_cap,
         )
+    return o

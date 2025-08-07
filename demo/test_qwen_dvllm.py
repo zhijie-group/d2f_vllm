@@ -1,3 +1,5 @@
+import os
+
 from d2f_vllm import LLM, SamplingParams
 from viztracer import VizTracer
 
@@ -37,7 +39,10 @@ if __name__ == "__main__":
         '<|beginoftext|>from typing import List\n\n\ndef below_zero(operations: List[int]) -> bool:\n    """ You\'re given a list of deposit and withdrawal operations on a bank account that starts with\n    zero balance. Your task is to detect if at any point the balance of account fallls below zero, and\n    at that point function should return True. Otherwise it should return False.\n    >>> below_zero([1, 2, 3])\n    False\n    >>> below_zero([1, 2, -4, 5])\n    True\n    """\n\n\n',
         '<|beginoftext|>from typing import List\n\n\ndef mean_absolute_deviation(numbers: List[float]) -> float:\n    """ For a given list of input numbers, calculate Mean Absolute Deviation\n    around the mean of this dataset.\n    Mean Absolute Deviation is the average absolute difference between each\n    element and a centerpoint (mean in this case):\n    MAD = average | x - x_mean |\n    >>> mean_absolute_deviation([1.0, 2.0, 3.0, 4.0])\n    1.0\n    """\n\n\n'
     ]
-
-    # with VizTracer(output_file="log/profiles/perf_dvllm_qwen_8B.json", file_info=True) as tracer:
-    outputs = llm.generate(prompts, sampling_params)
+    output_file = "log/profiles/perf_dvllm_qwen_8B.json"
+    if os.path.exists(output_file):
+        os.remove(output_file)
+    # with VizTracer(output_file=output_file, file_info=True) as tracer:
+    #     outputs = llm.generate(prompts[:5], sampling_params)
+    outputs = llm.generate(prompts[:], sampling_params)    
     outputs[0]["text"]

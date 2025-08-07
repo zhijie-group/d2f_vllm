@@ -27,6 +27,8 @@ class Config:
     eos: int = -1
     kvcache_block_size: int = 256
     num_kvcache_blocks: int = -1
+    k_cache_hdim_split_factor_x: int = 8
+    kv_cache_layout: str = "unified"  # "unified" or "distinct"
 
     def __post_init__(self):
         assert os.path.isdir(self.model)

@@ -284,25 +284,18 @@ def _fwd_grouped_kernel_stage1(
     cur_batch_seq_len = tl.load(B_Seqlen + cur_batch)
     cur_batch_req_idx = cur_batch
 
-    offs_q = cur_batch * stride_qbs + cur_head[:, None] * stride_qh + offs_d[
-        None, :]
-    q = tl.load(Q + offs_q,
-                mask=(mask_h[:, None]) & (mask_d[None, :]),
-                other=0.0)
+    offs_q = cur_batch * stride_qbs + cur_head[:, None] * stride_qh + offs_d[None, :]
+    q = tl.load(Q + offs_q, mask=(mask_h[:, None]) & (mask_d[None, :]), other=0.0)
 
     if BLOCK_DPE > 0:
         offs_dpe = BLOCK_DMODEL + tl.arange(0, BLOCK_DPE)
         mask_dpe = offs_dpe < Lk
-        off_qpe = (cur_batch * stride_qbs + cur_head[:, None] * stride_qh +
-                   offs_dpe[None, :])
-        qpe = tl.load(Q + off_qpe,
-                      mask=(mask_h[:, None]) & (mask_dpe[None, :]),
-                      other=0.0)
+        off_qpe = (cur_batch * stride_qbs + cur_head[:, None] * stride_qh + offs_dpe[None, :])
+        qpe = tl.load(Q + off_qpe, mask=(mask_h[:, None]) & (mask_dpe[None, :]), other=0.0)
 
     kv_len_per_split = tl.cdiv(cur_batch_seq_len, NUM_KV_SPLITS)
     split_kv_start = kv_len_per_split * split_kv_id
-    split_kv_end = tl.minimum(split_kv_start + kv_len_per_split,
-                              cur_batch_seq_len)
+    split_kv_end = tl.minimum(split_kv_start + kv_len_per_split, cur_batch_seq_len)
 
     e_max = tl.zeros([BLOCK_H], dtype=tl.float32) - float("inf")
     e_sum = tl.zeros([BLOCK_H], dtype=tl.float32)
@@ -312,46 +305,26 @@ def _fwd_grouped_kernel_stage1(
         for start_n in range(split_kv_start, split_kv_end, BLOCK_N):
             offs_n = start_n + tl.arange(0, BLOCK_N)
             kv_page_number = tl.load(
-                Req_to_tokens + stride_req_to_tokens_b * cur_batch_req_idx +
-                offs_n // PAGE_SIZE,
-                mask=offs_n < split_kv_end,
-                other=0,
+                Req_to_tokens + stride_req_to_tokens_b * cur_batch_req_idx + offs_n // PAGE_SIZE,
+                mask=offs_n < split_kv_end, other=0,
             )
             kv_loc = kv_page_number * PAGE_SIZE + offs_n % PAGE_SIZE
-            offs_buf_k = (kv_loc[None, :] * stride_buf_kbs +
-                          cur_kv_head * stride_buf_kh + offs_d[:, None])
-            k = tl.load(
-                K_Buffer + offs_buf_k,
-                mask=(offs_n[None, :] < split_kv_end) & (mask_d[:, None]),
-                other=0.0,
-            )
+            offs_buf_k = (kv_loc[None, :] * stride_buf_kbs + cur_kv_head * stride_buf_kh + offs_d[:, None])
+            k = tl.load(K_Buffer + offs_buf_k, mask=(offs_n[None, :] < split_kv_end) & (mask_d[:, None]), other=0.0)
             qk = tl.dot(q, k.to(q.dtype))
             if BLOCK_DPE > 0:
-                offs_buf_kpe = (kv_loc[None, :] * stride_buf_kbs +
-                                cur_kv_head * stride_buf_kh +
-                                offs_dpe[:, None])
-                kpe = tl.load(
-                    K_Buffer + offs_buf_kpe,
-                    mask=(offs_n[None, :] < split_kv_end) &
-                    (mask_dpe[:, None]),
-                    other=0.0,
-                )
+                offs_buf_kpe = kv_loc[None, :] * stride_buf_kbs + cur_kv_head * stride_buf_kh + offs_dpe[:, None]
+                kpe = tl.load(K_Buffer + offs_buf_kpe, mask=(offs_n[None, :] < split_kv_end) & (mask_dpe[:, None]), other=0.0)
                 qk += tl.dot(qpe, kpe.to(qpe.dtype))
             qk *= sm_scale
 
             if logit_cap > 0:
                 qk = logit_cap * tanh(qk / logit_cap)
 
-            qk = tl.where(mask_h[:, None] & (offs_n[None, :] < split_kv_end),
-                          qk, float("-inf"))
+            qk = tl.where(mask_h[:, None] & (offs_n[None, :] < split_kv_end), qk, float("-inf"))
 
-            offs_buf_v = (kv_loc[:, None] * stride_buf_vbs +
-                          cur_kv_head * stride_buf_vh + offs_dv[None, :])
-            v = tl.load(
-                V_Buffer + offs_buf_v,
-                mask=(offs_n[:, None] < split_kv_end) & (mask_dv[None, :]),
-                other=0.0,
-            )
+            offs_buf_v = kv_loc[:, None] * stride_buf_vbs + cur_kv_head * stride_buf_vh + offs_dv[None, :]
+            v = tl.load(V_Buffer + offs_buf_v, mask=(offs_n[:, None] < split_kv_end) & (mask_dv[None, :]), other=0.0)
 
             n_e_max = tl.maximum(tl.max(qk, 1), e_max)
             re_scale = tl.exp(e_max - n_e_max)
@@ -362,24 +335,11 @@ def _fwd_grouped_kernel_stage1(
             e_sum = e_sum * re_scale + tl.sum(p, 1)
             e_max = n_e_max
 
-        offs_mid_o = (cur_batch * stride_mid_ob +
-                      cur_head[:, None] * stride_mid_oh +
-                      split_kv_id * stride_mid_os + offs_dv[None, :])
+        offs_mid_o = cur_batch * stride_mid_ob + cur_head[:, None] * stride_mid_oh + split_kv_id * stride_mid_os + offs_dv[None, :]
+        tl.store(Att_Out + offs_mid_o, acc / e_sum[:, None], mask=(mask_h[:, None]) & (mask_dv[None, :]))
+        offs_mid_o_1 = cur_batch * stride_mid_ob + cur_head * stride_mid_oh + split_kv_id * stride_mid_os + Lv
 
-        tl.store(
-            Att_Out + offs_mid_o,
-            acc / e_sum[:, None],
-            mask=(mask_h[:, None]) & (mask_dv[None, :]),
-        )
-
-        offs_mid_o_1 = (cur_batch * stride_mid_ob + cur_head * stride_mid_oh +
-                        split_kv_id * stride_mid_os + Lv)
-
-        tl.store(
-            Att_Out + offs_mid_o_1,
-            e_max + tl.log(e_sum),
-            mask=mask_h,
-        )
+        tl.store(Att_Out + offs_mid_o_1, e_max + tl.log(e_sum), mask=mask_h)
 
 
 def _decode_grouped_attn_m_fwd(

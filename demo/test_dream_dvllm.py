@@ -1,3 +1,4 @@
+import os
 import csv
 import pandas as pd
 
@@ -44,6 +45,7 @@ if __name__ == "__main__":
         accept_threshold=0.9,
         complete_threshold=0.95,
         add_new_block_threshold=0.1,
+        kv_cache_layout="distinct"
     )
  
     tokenizer = AutoTokenizer.from_pretrained(model, use_fast=True, trust_remote_code=True)
@@ -82,6 +84,11 @@ if __name__ == "__main__":
     ]
 
     sampling_params = SamplingParams(temperature=0.0, max_tokens=256)
-    # with VizTracer(output_file="log/profiles/perf_dvllm_dream.json", file_info=True) as tracer:
-    outputs = llm.generate(prompts, sampling_params)
+    
+    output_file = "log/profiles/perf_dvllm_dream_7B.json"
+    if os.path.exists(output_file):
+        os.remove(output_file)
+    # with VizTracer(output_file=output_file, file_info=True) as tracer:
+    #     outputs = llm.generate(prompts[:5], sampling_params)
+    outputs = llm.generate(prompts[:], sampling_params)
     print(outputs)

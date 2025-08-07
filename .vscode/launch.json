@@ -5,7 +5,6 @@
     "version": "0.2.0",
     "configurations": [
         
-
         {
             "name": "PyDbg: `Dream` Accelerate Launch Debug",
             "type": "debugpy",
@@ -48,7 +47,7 @@
             "program": "${workspaceFolder}/demo/test_dream_dvllm.py",
             "console": "integratedTerminal",
             "env": {
-                "CUDA_VISIBLE_DEVICES": "0,1"
+                "CUDA_VISIBLE_DEVICES": "7"
             }
         },
         {
@@ -61,6 +60,39 @@
                 "TRITON_INTERPRET": "1",
                 "CUDA_VISIBLE_DEVICES": "0,1"
             }
-        }
+        },
+        {
+            "name": "PyDbg: `d2f_vllm` kernel func `chunked_prefill_paged_decode`",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/demo/test_dllm_decoding_kernel.py",
+            "console": "integratedTerminal",
+            "env": {
+                "TRITON_INTERPRET": "1",
+                "CUDA_VISIBLE_DEVICES": "3"
+            }
+        },
+        {
+            "name": "PyDbg: `d2f_vllm` kernel func `causal_lm_decode_attention_fwd`",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/demo/test_causal_lm_decoding_kernel.py",
+            "console": "integratedTerminal",
+            "env": {
+                "TRITON_INTERPRET": "1",
+                "CUDA_VISIBLE_DEVICES": "0,1"
+            }
+        },
+        {
+            "name": "PyDbg: `d2f_vllm` kernel func `store_kvcache_kernel_diffusion_lm`",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/demo/test_dllm_kv_cache_store.py",
+            "console": "integratedTerminal",
+            "env": {
+                "TRITON_INTERPRET": "1",
+                "CUDA_VISIBLE_DEVICES": "0,1"
+            }
+        },
     ]
 }
