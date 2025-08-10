@@ -5,13 +5,13 @@ from tqdm import tqdm
 from einops import rearrange
 from torch.nn.functional import scaled_dot_product_attention
 
-from d2f_vllm.layers.attention.ops import diffusion_lm_parallel_flash_decoding
+from d2f_vllm.layers.attention.ops import diffusion_lm_parallel_flash_decoding, diffusion_lm_flash_decoding
 
 
 if __name__ == "__main__":
     torch.random.manual_seed(114514)
     
-    num = 1
+    num = 20
     seq_lens = torch.tensor([32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 
                 32, 32, 32, 32, 32, 32, 32, 32, 32, 32]).to(torch.int32).to("cuda")[:num]
     seq_lens = seq_lens * 2
@@ -26,7 +26,7 @@ if __name__ == "__main__":
     qkv_len = sum(seq_lens)
     q_shape = (qkv_len, 28, 128)
     k_shape = (qkv_len, 4, 128)
-    precision = torch.float32
+    precision = torch.bfloat16
     q = torch.randn(q_shape).to("cuda").to(precision)
     k = torch.randn(k_shape).to("cuda").to(precision)
     v = torch.randn_like(k).to("cuda").to(precision)
@@ -65,8 +65,8 @@ if __name__ == "__main__":
     o = torch.empty_like(q).to("cuda").to(precision)
 
     s = time.time()
-    NSTEPS = 1
-    NLayers = 1
+    NSTEPS = 120
+    NLayers = 28
     T = NSTEPS * NLayers
     for _ in tqdm(range(T)):
         diffusion_lm_parallel_flash_decoding(
@@ -75,6 +75,11 @@ if __name__ == "__main__":
             max(total_lens), max(seq_lens),
             1.0, 1.0, diffusion_blk_sz=32, mask=mask
         )
+        # diffusion_lm_flash_decoding(
+        #     q, k, v, mask, k_cache, v_cache, block_tables, 
+        #     cu_seqlens_q, seq_lens, total_lens, ctx_lens,
+        #     diffusion_block_size=32
+        # )
     
     temp_o = o[:64]
     k_cache = rearrange(k_cache, "b h n s x -> b s h (n x)").contiguous()
@@ -85,7 +90,7 @@ if __name__ == "__main__":
     q_in = rearrange_fn(q[:64])
     mask_in = rearrange(torch.cat([
         torch.ones((64, 119), dtype=torch.bool).to("cuda"),
-        mask[:64, :64]
+        torch.tril(torch.ones((64, 64), dtype=torch.bool)).to("cuda")
     ], dim=1), "h w -> 1 1 h w").contiguous()
     ref_o = scaled_dot_product_attention(q_in, k_in, v_in, mask_in, enable_gqa=True)
     ref_o = rearrange(ref_o, '1 h s d -> s h d').contiguous()

@@ -57,7 +57,7 @@ class LLMEngine:
 
     def step(self):
         seqs, is_prefill = self.scheduler.schedule()
-        sample_output = self.model_runner.call("run_verbose", seqs, is_prefill)
+        sample_output = self.model_runner.call("run", seqs, is_prefill)
         self.scheduler.postprocess(seqs, sample_output)
         outputs = [(seq.seq_id, seq.completion_token_ids) for seq in seqs if seq.is_finished]
         if self.engine_type == "causal_lm":

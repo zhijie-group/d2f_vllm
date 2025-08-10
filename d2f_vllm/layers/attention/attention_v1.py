@@ -152,7 +152,6 @@ class Attention(nn.Module):
                     softmax_scale=self.scale, causal=self.causal
                 )
             elif self.model_type == 'diffusion_lm':
-                
                 transpose_fn = lambda x: rearrange(x, 's h d -> h s d').unsqueeze(0)
                 q = transpose_fn(q)
                 k_list, v_list = [torch.split(tensor, context.seq_lens, dim=0) for tensor in (k, v)]

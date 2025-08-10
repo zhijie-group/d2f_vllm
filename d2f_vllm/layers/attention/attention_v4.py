@@ -1,3 +1,4 @@
+import os
 import torch
 
 import torch.nn as nn
@@ -5,12 +6,13 @@ import torch.nn as nn
 from typing import List
 from functools import lru_cache, partial
 from einops import rearrange
-from torch.nn.functional import scaled_dot_product_attention
-from torch.nn.attention.flex_attention import flex_attention, create_block_mask 
+from torch.nn.attention.flex_attention import create_block_mask 
+from transformers.integrations.flex_attention import compile_friendly_flex_attention as flex_attention
 
 from d2f_vllm.layers.attention.ops import (
-    causal_lm_flash_decoding, diffusion_lm_parallel_flash_decoding,
-    store_kvcache_unified, store_kvcache_distinct_layout
+    causal_lm_flash_decoding, diffusion_lm_flash_decoding, diffusion_lm_parallel_flash_decoding,
+    store_kvcache_unified_layout, store_kvcache_distinct_layout, load_kvcache,
+    CHECK_STORING, CHECK_LOADING
 )
 from d2f_vllm.utils.context import ContextForDiffusionLM, get_context_causal_lm, get_context_diffusion_lm
 
@@ -42,7 +44,11 @@ class Attention(nn.Module):
             "BLOCK_N2": 32,
         } if is_rtx_xx90(torch.cuda.get_device_name(0)) else None
         self.prefill_attention = torch.compile(
-            partial(flex_attention, kernel_options=kernel_options, enable_gqa=True), dynamic=True)
+            partial(flex_attention, kernel_options=kernel_options, enable_gqa=True, 
+                    return_lse=False, training=False), dynamic=True)
+        self.decode_attention = torch.compile(
+            partial(flex_attention, kernel_options=kernel_options, enable_gqa=True, 
+                    return_lse=False, training=False), dynamic=True)
         self._block_mask_cache = {}
 
     @lru_cache(maxsize=32)
@@ -92,8 +98,9 @@ class Attention(nn.Module):
         # Fast Store KV cache
         if k_cache.numel() and v_cache.numel():
             if not (self.model_type == 'diffusion_lm' and not context.need_kv_cache_store):
-                store_kvcache = store_kvcache_unified if is_unified_layout else store_kvcache_distinct_layout
+                store_kvcache = store_kvcache_unified_layout if is_unified_layout else store_kvcache_distinct_layout
                 store_kvcache(k, v, k_cache, v_cache, context.slot_mapping, self.model_type)
+                # CHECK_STORING(k_cache, v_cache, k, v, context)
 
         transpose_fn = lambda x: rearrange(x, 's h d -> 1 h s d').contiguous()
         # Prefill / Decode logic TODO: Replace the Flex Attention Prefilling
@@ -121,17 +128,20 @@ class Attention(nn.Module):
                 config = context.seqs[0].config
                 diffusion_block_size = config.diffusion_block_size
                 if is_unified_layout:
-                    x = config.k_cache_hdim_split_factor_x
-                    k_cache = rearrange(k_cache, "b s h (n x) -> b h n s x", n=k_cache.shape[-1]//x, x=x).contiguous()
-                    v_cache = rearrange(v_cache, "b s h d -> b h d s").contiguous()
-                    o = torch.empty_like(q).to(q.device).to(q.dtype)
-                    diffusion_lm_parallel_flash_decoding(
-                        q, k, v, o, str(k_cache.dtype), k_cache, v_cache, 
-                        context.block_tables, context.cu_seqlens_q, context.total_lens,
-                        max(context.total_lens), max(context.seq_lens), 1.0, 1.0,
-                        diffusion_block_size
-                    )
+                    q_t = transpose_fn(q)
+                    if context.block_mask.shape == torch.Size([288, 824]):
+                        pass
+                    k_comb, v_comb = load_kvcache(self.k_cache, self.v_cache, context, k, v)
+                    # k_comb, v_comb = CHECK_LOADING(k_comb, v_comb, k, v, k_cache, v_cache, context)``
+                    k_t, v_t = transpose_fn(k_comb), transpose_fn(v_comb)
+
+                    B, H, Sq, _ = q_t.shape
+                    _, _, Skv, _ = k_t.shape
+                    block_mask = self.dllm_block_mask(context.block_mask, B, H, Sq, Skv, str(q.device))
+
+                    o = self.decode_attention(q_t, k_t, v_t, block_mask=block_mask)
                 else:
+                    # FIXME: Kernel not ok...
                     o = torch.empty_like(q).to(q.device).to(q.dtype)
                     diffusion_lm_parallel_flash_decoding(
                         q, k, v, o, str(k_cache.dtype), k_cache, v_cache, 
@@ -139,23 +149,35 @@ class Attention(nn.Module):
                         max(context.total_lens), max(context.seq_lens), 1.0, 1.0,
                         diffusion_block_size, context.block_mask
                     )
-                    # Check if the operator is correct
-                    temp_o = o[:32]
-                    x = config.k_cache_hdim_split_factor_x
-                    k_cache = rearrange(k_cache, "b h n s x -> b s h (n x)", n=k.shape[-1]//x, x=x).contiguous()
-                    v_cache = rearrange(v_cache, "b h d s -> b s h d").contiguous()
-                    rearrange_fn = lambda ts: rearrange(ts, 's h d -> 1 h s d').contiguous()
-                    k_in = rearrange_fn(torch.cat([k_cache[0][:119], k[:32]]))
-                    v_in = rearrange_fn(torch.cat([v_cache[0][:119], v[:32]]))
-                    q_in = rearrange_fn(q[:32])
-                    ref_o = scaled_dot_product_attention(q_in, k_in, v_in, enable_gqa=True)
-                    ref_o = rearrange(ref_o, '1 h s d -> s h d').contiguous()
-                    assert torch.allclose(temp_o, ref_o, atol=1e-4, rtol=1e-4)
             
         # Final reshape
-        if not context.is_prefill:
-            o = o.view(-1, self.num_heads * self.head_dim)
-        elif context.is_prefill:
-            o = rearrange(o, '1 h s d -> s (h d)')
+        if context.kv_cache_layout == "unified":
+            o = rearrange(o, '1 h s d -> s (h d)').contiguous()
+        else:
+            if not context.is_prefill:
+                o = o.view(-1, self.num_heads * self.head_dim).contiguous()
+            elif context.is_prefill:
+                o = rearrange(o, '1 h s d -> s (h d)').contiguous()
 
         return o
+    
+# Used for checkout the correctness of the operator
+# o = diffusion_lm_flash_decoding(
+#     q, k, v, context.block_mask, k_cache, v_cache, 
+#     context.block_tables, context.cu_seqlens_q, 
+#     context.seq_lens, context.total_lens, context.context_lens,
+#     diffusion_block_size, 
+# )
+# Check if the operator is correct
+# from torch.nn.functional import scaled_dot_product_attention
+# temp_o = o[:32]
+# x = config.k_cache_hdim_split_factor_x
+# k_cache = rearrange(k_cache, "b h n s x -> b s h (n x)", n=k.shape[-1]//x, x=x).contiguous()
+# v_cache = rearrange(v_cache, "b h d s -> b s h d").contiguous()
+# rearrange_fn = lambda ts: rearrange(ts, 's h d -> 1 h s d').contiguous()
+# k_in = rearrange_fn(torch.cat([k_cache[0][:119], k[:32]]))
+# v_in = rearrange_fn(torch.cat([v_cache[0][:119], v[:32]]))
+# q_in = rearrange_fn(q[:32])
+# ref_o = scaled_dot_product_attention(q_in, k_in, v_in, enable_gqa=True)
+# ref_o = rearrange(ref_o, '1 h s d -> s h d').contiguous()
+# assert torch.allclose(temp_o, ref_o, atol=1e-4, rtol=1e-4)

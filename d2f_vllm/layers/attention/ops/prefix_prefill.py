@@ -87,7 +87,7 @@ def _fwd_kernel_d2f(Q, K, V, Mask,
     q = tl.load(Q + offs_q, mask=dim_mask[None, :] & (offs_m[:, None] < cur_batch_query_len), other=0.0) # [M,D]
 
     # initialize pointer to m and l
-    m_i = tl.full([BLOCK_M], float(-1e9), dtype=tl.float32)
+    m_i = tl.full([BLOCK_M], float("-inf"), dtype=tl.float32)
     l_i = tl.full([BLOCK_M], 1.0, dtype=tl.float32)
     acc = tl.zeros([BLOCK_M, BLOCK_DMODEL_PADDED], dtype=tl.float32)  # [M,D]
 
@@ -135,14 +135,14 @@ def _fwd_kernel_d2f(Q, K, V, Mask,
             # sliding window may lead to the entire row being masked.
             # This then makes m_ij contain -inf, which causes NaNs in
             # exp().
-            qk = tl.where((cur_batch_ctx_len + offs_m[:, None]) - (start_n + offs_bs_n[None, :]) < SLIDING_WINDOW, qk, -1e8)
+            qk = tl.where((cur_batch_ctx_len + offs_m[:, None]) - (start_n + offs_bs_n[None, :]) < SLIDING_WINDOW, qk, -10000)
 
         # compute running maximum
         m_ij = tl.maximum(m_i, tl.max(qk, axis=1))
         p = tl.exp(qk - m_ij[:, None])
-        
+        l_ij = tl.sum(p, axis=1)
         alpha = tl.exp(m_i - m_ij)
-        l_ij = alpha * l_i + tl.sum(p, axis=1)
+        acc = acc * alpha[:, None]
 
         # update acc
         if start_n + BLOCK_SIZE > cur_batch_ctx_len or BLOCK_DMODEL != BLOCK_DMODEL_PADDED:
@@ -158,9 +158,9 @@ def _fwd_kernel_d2f(Q, K, V, Mask,
             v = v_load
         p = p.to(v.dtype)
 
-        acc = acc * alpha[:, None] + tl.dot(p, v, acc=acc, input_precision=IN_PRECISION)
+        acc = tl.dot(p, v, acc=acc, input_precision=IN_PRECISION)
         # # update m_i and l_i
-        l_i = l_ij
+        l_i = l_i * alpha + l_ij
         m_i = m_ij
 
     offs_k = offs_n[None, :] * stride_kbs + cur_kv_head * stride_kh + offs_d[:, None] * stride_kd
@@ -192,9 +192,9 @@ def _fwd_kernel_d2f(Q, K, V, Mask,
         mask_ptrs = Mask + offs_mask
         m_mask = (offs_m[:, None] < cur_batch_query_len) & ((start_n + offs_n[None, :]) < cur_batch_query_len)
         mask = tl.load(mask_ptrs, mask=m_mask, other=False)
-        qk += tl.where(mask, 0.0, float("-inf"))
+        qk = tl.where(mask, qk, float("-inf"))
         if SLIDING_WINDOW > 0:
-            qk = tl.where(offs_m[:, None] - (start_n + offs_n[None, :]) < SLIDING_WINDOW, qk, -1e9)
+            qk = tl.where(offs_m[:, None] - (start_n + offs_n[None, :]) < SLIDING_WINDOW, qk, -10000)
 
         # compute running maximum
         m_ij = tl.maximum(m_i, tl.max(qk, axis=1))
@@ -1056,7 +1056,7 @@ def context_attention_fwd(q,
             num_stages=1,
             **extra_kargs)
     else:
-        # TODO: Probably Set BLOCK_M to Stable Size
+        # FIXME: computation not correct
         _fwd_kernel_d2f[grid](
             q, k, v, mask,
             k_cache, v_cache,

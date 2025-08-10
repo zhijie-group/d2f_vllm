@@ -3,8 +3,7 @@
     // Hover to view descriptions of existing attributes.
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
-    "configurations": [
-        
+    "configurations": [    
         {
             "name": "PyDbg: `Dream` Accelerate Launch Debug",
             "type": "debugpy",
@@ -47,6 +46,8 @@
             "program": "${workspaceFolder}/demo/test_dream_dvllm.py",
             "console": "integratedTerminal",
             "env": {
+                // "TORCHINDUCTOR_DISABLE": "1",
+                // "TRITON_INTERPRET": "1",
                 "CUDA_VISIBLE_DEVICES": "7"
             }
         },
@@ -54,7 +55,7 @@
             "name": "PyDbg: `d2f_vllm` kernel func `load_kvcache_kernel`",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/demo/test_load_kv_cache_kernel.py",
+            "program": "${workspaceFolder}/demo/test_dllm_kv_cache_load.py",
             "console": "integratedTerminal",
             "env": {
                 "TRITON_INTERPRET": "1",

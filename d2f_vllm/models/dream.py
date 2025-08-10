@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn as nn
 import torch.distributed as dist
@@ -9,6 +10,12 @@ from d2f_vllm.layers.linear import RowParallelLinear, ColumnParallelLinear
 from d2f_vllm.layers.rotary_embedding import get_rope
 from d2f_vllm.layers.embed_head import VocabParallelEmbedding, ParallelLMHead
 from d2f_vllm.models.config.dream.configuration_dream import DreamConfig
+
+
+if os.environ.get("TRITON_INTERPRET", None) == "1":
+    torch._dynamo.reset()
+    torch._dynamo.config.suppress_errors = True
+    torch.backends.optimized_mode = False
 
 
 class DreamRMSNorm(RMSNorm):

@@ -174,7 +174,7 @@ class SchedulerForDiffusionLM(SchedulerBase):
                     for true_local_id, accepted_id in zip(true_local_ids, accepted_ids):
                         diffusion_block.modify_token(true_local_id, sampled_tokens[accepted_id])
                         if ((not seq.ignore_eos and sampled_tokens[accepted_id].item() == self.eos) 
-                            or seq.num_completion_tokens == seq.max_tokens):
+                            or seq.num_completion_tokens >= seq.max_tokens):
                             seq.meet_eos = True
             if seq.meet_eos and seq.diffusion_blocks[-1].available_to_cache:
                 seq.status = SequenceStatus.FINISHED

@@ -43,10 +43,6 @@ class SequenceBase:
         return self.status == SequenceStatus.FINISHED
 
     @property
-    def num_completion_tokens(self) -> int:
-        return self.num_tokens - self.num_prompt_tokens
-
-    @property
     def prompt_token_ids(self) -> List[int]:
         return self.token_ids[:self.num_prompt_tokens]
 
@@ -94,7 +90,11 @@ class SequenceForCausalLM(SequenceBase):
             self.token_ids = state[-1]
         else:
             self.last_token = state[-1]
-            
+
+    @property
+    def num_completion_tokens(self) -> int:
+        return self.num_tokens - self.num_prompt_tokens
+    
     @property
     def completion_token_ids(self) -> List[int]:
         return self.token_ids[self.num_prompt_tokens:]
@@ -201,7 +201,9 @@ class DiffusionBlock:
             self.status = DiffusionBlockStatus.IN_CACHE
         
     def modify_token(self, local_token_id: int, modified_to: int) -> None:
-        self.seq.token_ids[local_token_id + self.global_start_id] = modified_to.item()
+        target_id = local_token_id + self.global_start_id
+        assert self.seq.token_ids[target_id] == self.mask_token_id
+        self.seq.token_ids[target_id] = modified_to.item()
         self.seq.new_tokens += 1
     
 
@@ -213,6 +215,7 @@ class SequenceForDiffusionLM(SequenceBase):
                  config: Config = None):
         super().__init__(token_ids, sampling_params)
         self.config = config
+        self.kv_cache_layout = config.kv_cache_layout
         self.eos_token_id = config.eos
         self.max_model_len = config.max_model_len
         self.mask_token_id = config.mask_token_id
@@ -322,6 +325,10 @@ class SequenceForDiffusionLM(SequenceBase):
                 f"input_token_ids={self.input_token_ids}, input_num_tokens={self.input_num_tokens})")
     
     @property
+    def num_completion_tokens(self) -> int:
+        return self.num_tokens - self.input_num_tokens
+    
+    @property
     def completion_token_ids(self) -> List[int]:
         return self.token_ids[self.input_num_prompt_tokens:]
     
@@ -378,10 +385,6 @@ class SequenceForDiffusionLM(SequenceBase):
         return self.cached_or_caching_last_token_id + 1
     
     @property
-    def caching_num_tokens(self) -> int:
-        return sum(block.size for block in self.diffusion_blocks if block.is_in_cache)
-    
-    @property
     def cached_num_tokens(self) -> int:
         return sum(block.size for block in self.diffusion_blocks if block.is_in_cache)
     
@@ -427,19 +430,25 @@ class SequenceForDiffusionLM(SequenceBase):
         self.new_tokens = 0
     
     def post_process(self) -> None:
-        for block_id, block in enumerate(self.diffusion_blocks):
-            block.cursor = 0
-            previous_caching_blocks = self.caching_blocks[:block_id]
-            if block.is_to_cache:
-                block.in_cache()
-            elif sum(block.local_mask_tokens) == 0 and sum(previous_caching_blocks) == len(previous_caching_blocks):
-                block.to_cache()
-            else:
-                break
+        for diff_blk in self.diffusion_blocks:
+            diff_blk.cursor = 0
+            if diff_blk.is_in_cache:
+                continue
+            
+            if diff_blk.is_to_cache:
+                diff_blk.in_cache()
+            elif diff_blk.is_active:
+                if diff_blk.available_to_cache:
+                    diff_blk.to_cache()
+                else:
+                    break
     
     @property
     def current_block_mask(self) -> torch.Tensor:
-        return self.block_mask[..., self.cached_num_tokens:, self.cached_num_tokens:]
+        if self.kv_cache_layout == "distinct":
+            return self.block_mask[..., self.cached_num_tokens:, self.cached_num_tokens:]
+        else:
+            return self.block_mask[..., self.cached_num_tokens:, :]
     
     def update_block_mask(self, is_prefill: bool = False) -> None:
         if is_prefill:

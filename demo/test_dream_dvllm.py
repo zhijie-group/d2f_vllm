@@ -42,10 +42,10 @@ if __name__ == "__main__":
         model_type="diffusion_lm",
         enforce_eager=True, 
         tensor_parallel_size=1,
-        accept_threshold=0.9,
+        accept_threshold=0.95,
         complete_threshold=0.95,
         add_new_block_threshold=0.1,
-        kv_cache_layout="distinct"
+        kv_cache_layout="unified"
     )
  
     tokenizer = AutoTokenizer.from_pretrained(model, use_fast=True, trust_remote_code=True)
@@ -75,7 +75,7 @@ if __name__ == "__main__":
         '<|beginoftext|>\n\ndef truncate_number(number: float) -> float:\n    """ Given a positive floating point number, it can be decomposed into\n    and integer part (largest integer smaller than given number) and decimals\n    (leftover part always smaller than 1).\n\n    Return the decimal part of the number.\n    >>> truncate_number(3.5)\n    0.5\n    """\n\n\n',
         '<|beginoftext|>from typing import List\n\n\ndef below_zero(operations: List[int]) -> bool:\n    """ You\'re given a list of deposit and withdrawal operations on a bank account that starts with\n    zero balance. Your task is to detect if at any point the balance of account fallls below zero, and\n    at that point function should return True. Otherwise it should return False.\n    >>> below_zero([1, 2, 3])\n    False\n    >>> below_zero([1, 2, -4, 5])\n    True\n    """\n\n\n',
         '<|beginoftext|>from typing import List\n\n\ndef mean_absolute_deviation(numbers: List[float]) -> float:\n    """ For a given list of input numbers, calculate Mean Absolute Deviation\n    around the mean of this dataset.\n    Mean Absolute Deviation is the average absolute difference between each\n    element and a centerpoint (mean in this case):\n    MAD = average | x - x_mean |\n    >>> mean_absolute_deviation([1.0, 2.0, 3.0, 4.0])\n    1.0\n    """\n\n\n'
-    ]
+    ][:]
 
     prompts = [
         tokenizer.apply_chat_template(chat, tokenize=False, add_generation_prompt=True) 
@@ -91,4 +91,6 @@ if __name__ == "__main__":
     # with VizTracer(output_file=output_file, file_info=True) as tracer:
     #     outputs = llm.generate(prompts[:5], sampling_params)
     outputs = llm.generate(prompts[:], sampling_params)
-    print(outputs)
+    for idx, o in enumerate(outputs):
+        print("\n", "=*=" * 30)
+        print(f"[Prompt {idx} Result] \n{chat_prompts[idx] + "\n-----<Start-of-Response>-----\n" + o['text']}\n")

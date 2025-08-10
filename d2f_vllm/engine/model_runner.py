@@ -436,12 +436,16 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
         max_seqlen_k = 0
         slot_mapping = []
         block_tables = None
+        context_lens = []
+        seq_lens = []
         for seq in seqs:
             seq.next_diffusion_step(is_prefill=True)
             
             total_seqlen = len(seq)
             input_ids.extend(seq[seq.num_cached_tokens:])
             positions.extend(list(range(seq.num_cached_tokens, total_seqlen)))
+            seq_lens.append(total_seqlen)
+            context_lens.append(0)
             
             seqlen_q = total_seqlen - seq.num_cached_tokens
             seqlen_k = total_seqlen
@@ -461,15 +465,20 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
                     end = start + seq.last_block_prompt_num_tokens 
                 slot_mapping.extend(list(range(start, end)))
                 slot_mapping.extend([-1] * seq.diffusion_block_size)  # padding to block size
-        if cu_seqlens_k[-1] > cu_seqlens_q[-1]:    # prefix cache
-            block_tables = self.prepare_block_tables(seqs)
+        # if cu_seqlens_k[-1] > cu_seqlens_q[-1]:    # prefix cache
+        block_tables = self.prepare_block_tables(seqs)
         input_ids = torch.tensor(input_ids, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
         positions = torch.tensor(positions, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
+        seq_lens_ts = torch.tensor(seq_lens, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
+        context_lens = torch.tensor(context_lens, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
         cu_seqlens_q = torch.tensor(cu_seqlens_q, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
         cu_seqlens_k = torch.tensor(cu_seqlens_k, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
         slot_mapping = torch.tensor(slot_mapping, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
-        set_context_diffusion_lm(True, cu_seqlens_q, cu_seqlens_k, max_seqlen_q, max_seqlen_k, slot_mapping, 
-                                 None, block_tables, seqs, kv_cache_layout=self.config.kv_cache_layout)
+        set_context_diffusion_lm(True, cu_seqlens_q=cu_seqlens_q, cu_seqlens_k=cu_seqlens_k, 
+                                 max_seqlen_q=max_seqlen_q, max_seqlen_k=max_seqlen_k, slot_mapping=slot_mapping, 
+                                 context_lens=context_lens, block_tables=block_tables, seqs=seqs, 
+                                 kv_cache_layout=self.config.kv_cache_layout,
+                                 seq_lens=seq_lens, seq_lens_ts=seq_lens_ts)
         return input_ids, positions
 
     def prepare_decode(self, seqs: List[SequenceForDiffusionLM]):
@@ -494,17 +503,17 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
             context_lens.append(cur_context_len)
             
             total_seqlen = len(seq)
-            seqlen_q = total_seqlen - seq.cached_or_caching_num_tokens
+            seqlen_q = total_seqlen - seq.cached_num_tokens
             seqlen_k = total_seqlen
             cu_seqlens_q.append(cu_seqlens_q[-1] + seqlen_q)
             cu_seqlens_k.append(cu_seqlens_k[-1] + seqlen_k)
             
             mem_block_to_diffusion_blocks_map = seq.mem_block_to_diffusion_blocks_map
+            context_len = context_lens[seq_id_to_queue_id[seq_id]]
             for mem_block_idx in range(seq.num_cached_blocks, seq.num_blocks):
                 left_idx = mem_block_idx * seq.block_size
                 end_idx = left_idx + seq.block_size
                 cur_map = mem_block_to_diffusion_blocks_map[mem_block_idx]
-                context_len = context_lens[seq_id_to_queue_id[seq_id]]
                 is_last_block = False
                 meet_active_block = False
                 while left_idx < end_idx and not is_last_block and not meet_active_block:
@@ -523,8 +532,9 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
                         left_idx += step
                     elif diffusion_block.is_to_cache:
                         step = get_step(diffusion_block)
-                        cur_diffusion_block_start = diffusion_block.cursor
-                        cur_diffusion_block_end = diffusion_block.cursor = diffusion_block.cursor + step
+                        diffusion_block.cursor += step
+                        cur_diffusion_block_start = 0
+                        cur_diffusion_block_end = step
                         left_idx += step
                         mem_block_start = seq.block_table[mem_block_idx] * self.block_size + context_len % seq.block_size
                         context_len += step
@@ -550,7 +560,8 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
         set_context_diffusion_lm(False, slot_mapping=slot_mapping, context_lens=context_lens, 
                                  cu_seqlens_q=cu_seqlens_q, cu_seqlens_k=cu_seqlens_k,
                                  block_tables=block_tables, seqs=seqs, 
-                                 seq_lens=seq_lens, seq_lens_ts=seq_lens_ts, kv_cache_layout=self.config.kv_cache_layout, need_kv_cache_store=need_kv_cache_store)
+                                 seq_lens=seq_lens, seq_lens_ts=seq_lens_ts, 
+                                 kv_cache_layout=self.config.kv_cache_layout, need_kv_cache_store=need_kv_cache_store)
         return input_ids, positions
 
     @torch.inference_mode()

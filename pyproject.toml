@@ -23,6 +23,7 @@ dependencies = [
     "tqdm>=4.67.1",
     "transformers>=4.53.2",
     "viztracer>=1.0.4",
+    "matplotlib>=3.10.5",
 ]
 
 [tool.setuptools.packages.find]
