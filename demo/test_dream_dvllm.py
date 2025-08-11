@@ -42,8 +42,8 @@ if __name__ == "__main__":
         model_type="diffusion_lm",
         enforce_eager=True, 
         tensor_parallel_size=1,
-        accept_threshold=0.95,
-        complete_threshold=0.95,
+        accept_threshold=0.7,
+        complete_threshold=0.7,
         add_new_block_threshold=0.1,
         kv_cache_layout="unified"
     )
