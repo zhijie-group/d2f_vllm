@@ -340,7 +340,6 @@ dependencies = [
     { name = "torch" },
     { name = "tqdm" },
     { name = "transformers" },
-    { name = "triton" },
     { name = "viztracer" },
 ]
 
@@ -364,7 +363,6 @@ requires-dist = [
     { name = "torch", specifier = ">=2.7.1" },
     { name = "tqdm", specifier = ">=4.67.1" },
     { name = "transformers", specifier = ">=4.53.2" },
-    { name = "triton", specifier = ">=3.4.0" },
     { name = "viztracer", specifier = ">=1.0.4" },
 ]
 
