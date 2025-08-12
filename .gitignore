@@ -26,3 +26,4 @@ TestResults.xml
 lora_weight*
 log/
 dist/
+build/
