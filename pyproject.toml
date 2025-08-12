@@ -1,7 +1,7 @@
 [project]
-name = "d2f"
+name = "d2f_vllm"
 version = "0.1.0"
-description = "Add your description here"
+description = "vLLM implementation of Diffusion LLMs (based on D2F decoding paradigm)"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

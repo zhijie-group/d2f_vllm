@@ -54,8 +54,8 @@ In contrast, setting `add_new_block_threshold<1.0`, together with our `D2F` trai
 
 ## TODO List
 
-- [] Implement KV Cache loading kernel
-- [] Implement Async Engine and Streaming Generation
-- [] Faster Flash Attention Kernel
-- [] Diffusion LM CUDA Graph Capturing
-- [] ...
+- [ ] Implement KV Cache loading kernel
+- [ ] Implement Async Engine and Streaming Generation
+- [ ] Faster Flash Attention Kernel
+- [ ] Diffusion LM CUDA Graph Capturing
+- [ ] ...
