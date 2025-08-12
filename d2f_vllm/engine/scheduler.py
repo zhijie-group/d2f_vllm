@@ -159,6 +159,7 @@ class SchedulerForDiffusionLM(SchedulerBase):
         self.waiting.appendleft(seq)
 
     def postprocess(self, seqs: List[SequenceForDiffusionLM], sample_output: SampleOutputForDiffusionLM) -> None:
+        n_diff_steps = {}
         for seq in seqs:
             seq.reset_new_tokens()
             seq_id = str(seq.seq_id)
@@ -180,7 +181,9 @@ class SchedulerForDiffusionLM(SchedulerBase):
                 seq.status = SequenceStatus.FINISHED
                 self.block_manager.free(seq)
                 self.running.remove(seq)
+                n_diff_steps[seq.seq_id] = seq.n_steps
             seq.post_process()
+        return n_diff_steps
 
 class AutoScheduler:
     SCHEDULER_MAPPING = {

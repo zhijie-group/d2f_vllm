@@ -58,13 +58,13 @@ class LLMEngine:
     def step(self):
         seqs, is_prefill = self.scheduler.schedule()
         sample_output = self.model_runner.call("run", seqs, is_prefill)
-        self.scheduler.postprocess(seqs, sample_output)
+        n_diff_steps = self.scheduler.postprocess(seqs, sample_output)
         outputs = [(seq.seq_id, seq.completion_token_ids) for seq in seqs if seq.is_finished]
         if self.engine_type == "causal_lm":
             num_tokens = sum(len(seq) for seq in seqs) if is_prefill else -len(seqs)
         else:
             num_tokens = sum(seq.diffusion_num_tokens for seq in seqs) if is_prefill else sum(seq.new_tokens for seq in seqs)
-        return outputs, num_tokens, is_prefill
+        return outputs, num_tokens, is_prefill, n_diff_steps
 
     def is_finished(self):
         return self.scheduler.is_finished()
@@ -84,10 +84,11 @@ class LLMEngine:
         outputs = {}
         prefill_throughput = decode_throughput = 0.
         n_steps = 0
+        n_diff_steps = [-1] * len(prompts)
         while not self.is_finished():
             t = perf_counter()
             n_steps += 1
-            output, num_tokens, is_prefill = self.step()
+            output, num_tokens, is_prefill, cur_n_diff_steps = self.step()
             if use_tqdm:
                 if is_prefill:
                     prefill_throughput = num_tokens / (perf_counter() - t)
@@ -97,13 +98,21 @@ class LLMEngine:
                     "Prefill": f"{int(prefill_throughput)}tok/s",
                     "Decode": f"{int(decode_throughput)}tok/s",
                 })
+            if cur_n_diff_steps:
+                first_idx = min(cur_n_diff_steps.keys())
+                for seq_idx, n_diff_step in cur_n_diff_steps.items():
+                    if n_diff_step >= 0:
+                        n_diff_steps[int(seq_idx) - first_idx] = n_diff_step
             for seq_id, token_ids in output:
                 outputs[seq_id] = token_ids
                 if use_tqdm:
                     pbar.update(1)
         print(f"Finished in {n_steps} steps, prefill throughput: {prefill_throughput:.2f} tok/s, decode throughput: {decode_throughput:.2f} tok/s")
         outputs = [outputs[seq_id] for seq_id in sorted(outputs)]
-        outputs = [{"text": self.tokenizer.decode(token_ids), "token_ids": token_ids} for token_ids in outputs]
+        outputs = [{"text": self.tokenizer.decode(token_ids).split(self.tokenizer.eos_token)[0], 
+                    "token_ids": token_ids[:token_ids.index(self.config.eos)] if self.config.eos in token_ids else token_ids, 
+                    "n_diff_steps": n_diff_step} 
+                   for token_ids, n_diff_step in zip(outputs, n_diff_steps)]
         if use_tqdm:
             pbar.close()
         return outputs

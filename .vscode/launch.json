@@ -24,7 +24,7 @@
             ],
             "env": {
                 "HF_ALLOW_CODE_EVAL": "1",
-                "CUDA_VISIBLE_DEVICES": "7"
+                "CUDA_VISIBLE_DEVICES": "0"
             },
             "cwd": "${workspaceFolder}/demo"
         },

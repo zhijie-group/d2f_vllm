@@ -168,7 +168,7 @@ class ModelRunnerBase(ABC):
 class ModelRunnerForCausalLM(ModelRunnerBase):
     """Model runner for Causal Language Models."""
     def warmup_model(self):
-        return
+        # return
         torch.cuda.empty_cache()
         torch.cuda.reset_peak_memory_stats()
         max_num_batched_tokens, max_model_len = self.config.max_num_batched_tokens, self.config.max_model_len
@@ -359,7 +359,8 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
         self.mask_token_id = config.mask_token_id
             
     def warmup_model(self):
-        return
+        # return
+        print("Warming up model...")
         torch.cuda.empty_cache()
         torch.cuda.reset_peak_memory_stats()
         max_num_batched_tokens, max_model_len = self.config.max_num_batched_tokens, self.config.max_model_len
@@ -387,12 +388,25 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
         else:
             raise AttributeError(f"Cannot determine head_dim from config: {type(hf_config)}")
         
-        block_bytes = (2 * hf_config.num_hidden_layers * self.block_size * num_kv_heads * 
-                       head_dim * hf_config.torch_dtype.itemsize)
-        config.num_kvcache_blocks = int(total * config.gpu_memory_utilization - 
-                                        used - peak + current) // block_bytes
-        assert config.num_kvcache_blocks > 0
-        
+        block_bytes = (2 * hf_config.num_hidden_layers * self.block_size * num_kv_heads * head_dim * hf_config.torch_dtype.itemsize)
+        get_num_kvcache_blocks = lambda gpu_memory_utilization: int(total * gpu_memory_utilization - 
+                                                                    used - peak + current) // block_bytes
+        try:
+            num_kvcache_blocks = get_num_kvcache_blocks(config.gpu_memory_utilization)
+            assert num_kvcache_blocks > 0
+        except:
+            gpu_memory_utilization = config.gpu_memory_utilization
+            while num_kvcache_blocks <= 200: 
+                print(f"Warning: GPU memory utilization {gpu_memory_utilization} is too low to allocate kv cache. "
+                    f"Automatically adding 0.05, which is {gpu_memory_utilization + 0.05:.2f} now.")
+                gpu_memory_utilization += 0.05
+                num_kvcache_blocks = get_num_kvcache_blocks(gpu_memory_utilization)
+            print(f"Set gpu_memory_utilization to {gpu_memory_utilization:.2f} to allocate kv cache.")
+            config.gpu_memory_utilization = gpu_memory_utilization
+            
+        config.num_kvcache_blocks = num_kvcache_blocks
+        print(f"Allocated {config.num_kvcache_blocks} blocks of size {self.block_size} for kv cache on rank {self.rank}.")
+
         if config.kv_cache_layout == "distinct":
             # k_cache: [layer_id, block_id, head, head_dim // x, block_size(segmented seq_len), x]
             # v_cache: [layer_id, block_id, head, head_dim, block_size(segmented seq_len)]
@@ -464,7 +478,7 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
                 else:
                     end = start + seq.last_block_prompt_num_tokens 
                 slot_mapping.extend(list(range(start, end)))
-                slot_mapping.extend([-1] * seq.diffusion_block_size)  # padding to block size
+            slot_mapping.extend([-1] * seq.diffusion_block_size)  # padding to block size
         # if cu_seqlens_k[-1] > cu_seqlens_q[-1]:    # prefix cache
         block_tables = self.prepare_block_tables(seqs)
         input_ids = torch.tensor(input_ids, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
@@ -610,8 +624,11 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
 
     @torch.inference_mode()
     def capture_cudagraph(self):
-        # TODO
-        pass
+        '''
+            TODO: Varlen decoding does not support CUDA graph capture yet.
+            Can be implemented, but requires drastically high overhead.
+        '''
+        raise NotImplementedError("CUDA graph capture for DiffusionLM is not implemented yet.")
     
 
 class AutoModelRunner:

@@ -223,6 +223,7 @@ class SequenceForDiffusionLM(SequenceBase):
         self.block_mask = None
         self.meet_eos = False
         self.diffusion_blocks: List[DiffusionBlock] = []
+        self.n_steps = 0
     
     def __getstate__(self):
         diffusion_blocks_state = []
@@ -475,6 +476,7 @@ class SequenceForDiffusionLM(SequenceBase):
             self.block_mask = torch.cat([self.block_mask, down_cat_tensor], dim=-2)
 
     def next_diffusion_step(self, is_prefill: bool = False) -> None:
+        self.n_steps += 1
         if is_prefill:
             # Take a snapshot of the original input state
             self.input_token_ids = self.token_ids.copy()

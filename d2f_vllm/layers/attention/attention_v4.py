@@ -43,10 +43,7 @@ class Attention(nn.Module):
             "BLOCK_M2": 64,
             "BLOCK_N2": 32,
         } if is_rtx_xx90(torch.cuda.get_device_name(0)) else None
-        self.prefill_attention = torch.compile(
-            partial(flex_attention, kernel_options=kernel_options, enable_gqa=True, 
-                    return_lse=False, training=False), dynamic=True)
-        self.decode_attention = torch.compile(
+        self.attention = torch.compile(
             partial(flex_attention, kernel_options=kernel_options, enable_gqa=True, 
                     return_lse=False, training=False), dynamic=True)
         self._block_mask_cache = {}
@@ -116,7 +113,7 @@ class Attention(nn.Module):
             block_mask_fn = self.causal_lm_block_mask if self.model_type == 'causal_lm' else self.dllm_block_mask
             input_obj = context.cu_seqlens_q if self.model_type == 'causal_lm' else context.block_mask
             block_mask = block_mask_fn(input_obj, B, H, S, S, str(q.device))
-            o = self.prefill_attention(q_t, k_t, v_t, block_mask=block_mask)
+            o = self.attention(q_t, k_t, v_t, block_mask=block_mask)
         else:
             if self.model_type == 'causal_lm':
                 o = causal_lm_flash_decoding(
@@ -139,7 +136,7 @@ class Attention(nn.Module):
                     _, _, Skv, _ = k_t.shape
                     block_mask = self.dllm_block_mask(context.block_mask, B, H, Sq, Skv, str(q.device))
 
-                    o = self.decode_attention(q_t, k_t, v_t, block_mask=block_mask)
+                    o = self.attention(q_t, k_t, v_t, block_mask=block_mask)
                 else:
                     # FIXME: Kernel not ok...
                     o = torch.empty_like(q).to(q.device).to(q.dtype)
