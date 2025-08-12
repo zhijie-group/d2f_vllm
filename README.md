@@ -1,11 +1,18 @@
-# D2F
-Discrete Diffusion Forcing
+# D2F-vLLM
 
-## vLLM Implementation
+vLLM implementation for Diffusion LLMs, D2F is integrated as the core inference strategy, while also support training-free strategies like Fast-dLLM.
+
+## Foundation of Our vLLM Implementation
 
 Based on [Nano-vLLM](https://github.com/GeeeekExplorer/nano-vllm).
 
-## Configure the Project
+## Easy Install D2F-vLLM
+
+```shell
+pip install d2f_vllm
+```
+
+## Configure the Project from Source (for Developers)
 
 We use [UV](https://github.com/astral-sh/uv) to manage the whole project. 
 
