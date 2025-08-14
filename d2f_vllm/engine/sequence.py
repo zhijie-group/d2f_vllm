@@ -47,10 +47,6 @@ class SequenceBase:
         return self.token_ids[:self.num_prompt_tokens]
 
     @property
-    def num_cached_blocks(self) -> int:
-        return (self.num_cached_tokens + self.block_size - 1) // self.block_size
-
-    @property
     def num_blocks(self) -> int:
         return (self.num_tokens + self.block_size - 1) // self.block_size
 
@@ -98,6 +94,10 @@ class SequenceForCausalLM(SequenceBase):
     @property
     def completion_token_ids(self) -> List[int]:
         return self.token_ids[self.num_prompt_tokens:]
+    
+    @property
+    def num_cached_blocks(self) -> int:
+        return (self.num_cached_tokens + self.block_size - 1) // self.block_size
 
 
 class DiffusionBlockStatus(Enum):
@@ -398,6 +398,10 @@ class SequenceForDiffusionLM(SequenceBase):
     def cached_num_tokens(self) -> int:
         return sum(block.size for block in self.diffusion_blocks if block.is_in_cache)
     
+    @property
+    def num_cached_blocks(self) -> int:
+        return (self.cached_num_tokens + self.block_size - 1) // self.block_size
+
     @property
     def diffusion_num_tokens(self) -> int:
         return sum(self.mask_tokens)

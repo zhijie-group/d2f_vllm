@@ -150,7 +150,7 @@ class Attention(nn.Module):
                     CHECK_ATTENTION(o, q, k, v, k_cache, v_cache, context)
             
         # Final reshape
-        if context.kv_cache_layout == "unified":
+        if context.kv_cache_layout == "unified" and self.model_type == 'diffusion_lm':
             o = rearrange(o, '1 h s d -> s (h d)').contiguous()
         else:
             if not context.is_prefill:

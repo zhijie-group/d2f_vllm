@@ -9,7 +9,7 @@ if __name__ == "__main__":
         "/data1/ckpts/Qwen/Qwen3-8B", 
         use_lora=False,
         enforce_eager=True, 
-        tensor_parallel_size=1,
+        tensor_parallel_size=2,
         model_name="qwen3", 
         model_type="causal_lm"
     )

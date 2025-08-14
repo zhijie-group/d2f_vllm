@@ -456,12 +456,12 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
             seq.next_diffusion_step(is_prefill=True)
             
             total_seqlen = len(seq)
-            input_ids.extend(seq[seq.num_cached_tokens:])
-            positions.extend(list(range(seq.num_cached_tokens, total_seqlen)))
+            input_ids.extend(seq[seq.cached_num_tokens:])
+            positions.extend(list(range(seq.cached_num_tokens, total_seqlen)))
             seq_lens.append(total_seqlen)
             context_lens.append(0)
             
-            seqlen_q = total_seqlen - seq.num_cached_tokens
+            seqlen_q = total_seqlen - seq.cached_num_tokens
             seqlen_k = total_seqlen
             cu_seqlens_q.append(cu_seqlens_q[-1] + seqlen_q)
             cu_seqlens_k.append(cu_seqlens_k[-1] + seqlen_k)
@@ -505,6 +505,8 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
         seq_lens = []
         seq_id_to_queue_id = {}
         need_kv_cache_store = False
+        if sum(len(seq.diffusion_decoding_inputs()[0]) for seq in seqs) == 1120:
+            pass
         for seq_idx_in_queue, seq in enumerate(seqs): 
             seq_id = seq.seq_id
             seq_id_to_queue_id[seq_id] = seq_idx_in_queue
@@ -521,35 +523,37 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
             seqlen_k = total_seqlen
             cu_seqlens_q.append(cu_seqlens_q[-1] + seqlen_q)
             cu_seqlens_k.append(cu_seqlens_k[-1] + seqlen_k)
-            
+
             mem_block_to_diffusion_blocks_map = seq.mem_block_to_diffusion_blocks_map
             context_len = context_lens[seq_id_to_queue_id[seq_id]]
-            for mem_block_idx in range(seq.num_cached_blocks, seq.num_blocks):
-                left_idx = mem_block_idx * seq.block_size
-                end_idx = left_idx + seq.block_size
+            blk_idx_start = seq.num_cached_blocks - 1
+            blk_idx_end = seq.num_blocks
+            for mem_block_idx in range(blk_idx_start, blk_idx_end):
+                start_idx = mem_block_idx * seq.block_size
+                end_idx = start_idx + seq.block_size
                 cur_map = mem_block_to_diffusion_blocks_map[mem_block_idx]
                 is_last_block = False
                 meet_active_block = False
-                while left_idx < end_idx and not is_last_block and not meet_active_block:
-                    local_left_idx = lambda: left_idx % seq.block_size
-                    diffusion_block = seq.diffusion_blocks[cur_map[local_left_idx()]]
-                    if cur_map[local_left_idx()] == seq.num_diffusion_blocks - 1:
+                while start_idx < end_idx and not is_last_block and not meet_active_block:
+                    local_start_idx = lambda: start_idx % seq.block_size
+                    diffusion_block = seq.diffusion_blocks[cur_map[local_start_idx()]]
+                    if cur_map[local_start_idx()] == seq.num_diffusion_blocks - 1:
                         is_last_block = True
                     get_step = lambda diff_blk: (
                         diff_blk.remaining_length
-                        if diff_blk.remaining_length + local_left_idx() <= seq.block_size
-                        else seq.block_size - local_left_idx()
+                        if diff_blk.remaining_length + local_start_idx() <= seq.block_size
+                        else seq.block_size - local_start_idx()
                     )
                     if diffusion_block.is_in_cache:
                         step = get_step(diffusion_block)
                         diffusion_block.cursor += step
-                        left_idx += step
+                        start_idx += step
                     elif diffusion_block.is_to_cache:
                         step = get_step(diffusion_block)
                         diffusion_block.cursor += step
                         cur_diffusion_block_start = 0
                         cur_diffusion_block_end = step
-                        left_idx += step
+                        start_idx += step
                         mem_block_start = seq.block_table[mem_block_idx] * self.block_size + context_len % seq.block_size
                         context_len += step
                         slot_mapping.extend(list(range(mem_block_start + cur_diffusion_block_start,

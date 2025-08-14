@@ -4,6 +4,7 @@ import time
 
 import pandas as pd
 
+from tqdm import tqdm
 from datasets import load_dataset
 from viztracer import VizTracer
 
@@ -44,20 +45,20 @@ if __name__ == "__main__":
         model_type="diffusion_lm",
         enforce_eager=True, 
         tensor_parallel_size=2,
-        gpu_memory_utilization=0.10,
-        max_num_batched_tokens=2048,
-        max_num_seqs=64,
+        gpu_memory_utilization=0.60,
+        max_num_batched_tokens=1024,
+        max_num_seqs=20,
         max_model_len=1024,
-        accept_threshold=0.7,
-        complete_threshold=0.7,
+        accept_threshold=0.95,
+        complete_threshold=0.9,
         add_new_block_threshold=0.1,
         kv_cache_layout="unified"
     )
     tokenizer = LLM.tokenizer
     sampling_params = SamplingParams(temperature=0.0, max_tokens=256)
     
-    dataset = load_dataset("/data1/LargeData/openai/openai_humaneval")["test"]['prompt']
-    prompts = [tokenizer.bos_token + p for p in dataset]
+    dataset = load_dataset("/data1/LargeData/openai/gsm8k", "main")['test']['question'][:]
+    prompts = [tokenizer.bos_token + p for p in tqdm(dataset)]
     
     output_file = "log/profiles/perf_dvllm_dream_7B.json"
     if os.path.exists(output_file):
@@ -65,7 +66,7 @@ if __name__ == "__main__":
     # with VizTracer(output_file=output_file, file_info=True) as tracer:
     #     outputs = llm.generate(prompts[:5], sampling_params)
     s = time.time()
-    outputs = LLM.generate(prompts[:], sampling_params)
+    outputs = LLM.generate(prompts, sampling_params)
     e = time.time()
     print("=*=" * 30, 
           "\nProfiling Results\n", 
