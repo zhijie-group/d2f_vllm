@@ -12,7 +12,7 @@ from transformers.integrations.flex_attention import compile_friendly_flex_atten
 from d2f_vllm.layers.attention.ops import (
     causal_lm_flash_decoding, diffusion_lm_flash_decoding, diffusion_lm_parallel_flash_decoding,
     store_kvcache_unified_layout, store_kvcache_distinct_layout, load_kvcache,
-    CHECK_STORING, CHECK_LOADING
+    CHECK_STORING, CHECK_LOADING, CHECK_ATTENTION
 )
 from d2f_vllm.utils.context import ContextForDiffusionLM, get_context_causal_lm, get_context_diffusion_lm
 
@@ -140,12 +140,14 @@ class Attention(nn.Module):
                 else:
                     # FIXME: Kernel not ok...
                     o = torch.empty_like(q).to(q.device).to(q.dtype)
+                    q, k, o, k_cache, v_cache = map(lambda x: x.to(torch.float32), (q, k, o, k_cache, v_cache))
                     diffusion_lm_parallel_flash_decoding(
                         q, k, v, o, str(k_cache.dtype), k_cache, v_cache, 
                         context.block_tables, context.cu_seqlens_q, context.total_lens,
                         max(context.total_lens), max(context.seq_lens), 1.0, 1.0,
                         diffusion_block_size, context.block_mask
                     )
+                    CHECK_ATTENTION(o, q, k, v, k_cache, v_cache, context)
             
         # Final reshape
         if context.kv_cache_layout == "unified":
@@ -157,24 +159,3 @@ class Attention(nn.Module):
                 o = rearrange(o, '1 h s d -> s (h d)').contiguous()
 
         return o
-    
-# Used for checkout the correctness of the operator
-# o = diffusion_lm_flash_decoding(
-#     q, k, v, context.block_mask, k_cache, v_cache, 
-#     context.block_tables, context.cu_seqlens_q, 
-#     context.seq_lens, context.total_lens, context.context_lens,
-#     diffusion_block_size, 
-# )
-# Check if the operator is correct
-# from torch.nn.functional import scaled_dot_product_attention
-# temp_o = o[:32]
-# x = config.k_cache_hdim_split_factor_x
-# k_cache = rearrange(k_cache, "b h n s x -> b s h (n x)", n=k.shape[-1]//x, x=x).contiguous()
-# v_cache = rearrange(v_cache, "b h d s -> b s h d").contiguous()
-# rearrange_fn = lambda ts: rearrange(ts, 's h d -> 1 h s d').contiguous()
-# k_in = rearrange_fn(torch.cat([k_cache[0][:119], k[:32]]))
-# v_in = rearrange_fn(torch.cat([v_cache[0][:119], v[:32]]))
-# q_in = rearrange_fn(q[:32])
-# ref_o = scaled_dot_product_attention(q_in, k_in, v_in, enable_gqa=True)
-# ref_o = rearrange(ref_o, '1 h s d -> s h d').contiguous()
-# assert torch.allclose(temp_o, ref_o, atol=1e-4, rtol=1e-4)

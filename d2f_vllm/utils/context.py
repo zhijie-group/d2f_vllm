@@ -86,7 +86,29 @@ class ContextForDiffusionLM(ContextBase):
                     self.block_mask[start_row:end_row, start_col:end_col] = mask.clone()
                     start_row, start_col = end_row, end_col
                 self.block_mask = self.block_mask.to(mask.device)
-        
+    
+    @property
+    def block_mask_for_checking(self) -> torch.Tensor:
+        for seq in self.seqs:
+            seq.set_layout("unified")
+            
+        masks = [seq.current_block_mask for seq in self.seqs]
+        total_height = sum(mask.size(-2) for mask in masks)
+        total_width = sum(mask.size(-1) for mask in masks)
+        block_mask = torch.zeros(total_height, total_width, dtype=torch.bool)
+        start_row = 0
+        start_col = 0
+        for mask in masks:
+            height, width = mask.size(-2), mask.size(-1)
+            end_row = start_row + height
+            end_col = start_col + width
+            block_mask[start_row:end_row, start_col:end_col] = mask.clone()
+            start_row, start_col = end_row, start_col
+            
+        for seq in self.seqs:
+            seq.set_layout("distinct")
+        return block_mask.to(mask.device)
+
     @property
     def total_num_seqs(self) -> int:
         return len(self.seqs) if self.seqs is not None else 0

@@ -8,9 +8,11 @@
 # https://github.com/ModelTC/lightllm/blob/main/lightllm/models/llama/triton_kernel/context_flashattention_nopad.py
 
 import torch
+import triton
+
+import triton.language as tl
 
 from vllm.platforms import current_platform
-from vllm.triton_utils import tl, triton
 
 # Static kernels parameters
 BASE_BLOCK = 128 if current_platform.has_device_capability(80) else 64
@@ -55,6 +57,13 @@ def _fwd_kernel_d2f(Q, K, V, Mask,
     cur_head = tl.program_id(1)
     start_m = tl.program_id(2)
 
+    tl.device_print("=" * 60, cur_batch)
+    tl.device_print("Program Start", cur_batch)
+    tl.device_print("=" * 60, cur_batch)
+    tl.device_print("cur_batch", cur_batch)
+    tl.device_print("cur_head", cur_head)
+    tl.device_print("start_m", start_m)
+
     cur_kv_head = cur_head // num_queries_per_kv
 
     cur_batch_seq_len = tl.load(B_Seqlen + cur_batch)
@@ -81,9 +90,7 @@ def _fwd_kernel_d2f(Q, K, V, Mask,
     offs_m = start_m * BLOCK_M + tl.arange(0, BLOCK_M)
     # [M,D]
     offs_q = (cur_batch_in_all_start_index + offs_m[:, None]) * stride_qbs + cur_head * stride_qh + offs_d[None, :] * stride_qd
-
     dim_mask = tl.where(tl.arange(0, BLOCK_DMODEL_PADDED) < BLOCK_DMODEL, 1, 0).to(tl.int1)  # [D]
-
     q = tl.load(Q + offs_q, mask=dim_mask[None, :] & (offs_m[:, None] < cur_batch_query_len), other=0.0) # [M,D]
 
     # initialize pointer to m and l
@@ -96,6 +103,9 @@ def _fwd_kernel_d2f(Q, K, V, Mask,
         start_n = tl.multiple_of(start_n, BLOCK_SIZE)
         # ---- compute qk ----
         bn = tl.load(B_Loc + cur_batch * stride_b_loc_b + (start_n // BLOCK_SIZE) * stride_b_loc_s)
+        tl.device_print("[CTX] start_n=", start_n)
+        tl.device_print("[CTX] bn=", bn)
+        tl.device_print("[CTX] ctx_len=", cur_batch_ctx_len)
         # [D,BLOCK_SIZE]
         offs_k = (bn[None, :] * stride_k_cache_bs + cur_kv_head * stride_k_cache_h + 
                   (offs_d[:, None] // x) * stride_k_cache_d + 
@@ -119,9 +129,10 @@ def _fwd_kernel_d2f(Q, K, V, Mask,
             k = k_load
 
         qk = tl.zeros([BLOCK_M, BLOCK_SIZE], dtype=tl.float32)  # [M,N]
-        qk = tl.dot(q, k, acc=qk, input_precision=IN_PRECISION)
-        qk = tl.where((start_n + offs_bs_n[None, :]) < cur_batch_ctx_len, qk, float("-inf"))
-        
+        qk += tl.dot(q, k, input_precision=IN_PRECISION)
+        qk_mask = ((start_n + offs_bs_n[None, :]) < cur_batch_ctx_len) & (offs_m[:, None] < cur_batch_query_len)
+        qk = tl.where(qk_mask, qk, float("-inf"))
+
         qk *= sm_scale
         if SLIDING_WINDOW > 0:
             # (cur_batch_ctx_len + offs_m[:, None]) are the positions of
@@ -158,7 +169,7 @@ def _fwd_kernel_d2f(Q, K, V, Mask,
             v = v_load
         p = p.to(v.dtype)
 
-        acc = tl.dot(p, v, acc=acc, input_precision=IN_PRECISION)
+        acc += tl.dot(p, v, input_precision=IN_PRECISION)
         # # update m_i and l_i
         l_i = l_i * alpha + l_ij
         m_i = m_ij
@@ -174,13 +185,16 @@ def _fwd_kernel_d2f(Q, K, V, Mask,
     # compute query against itself (with custom dense mask)
     for start_n in tl.range(0, block_mask * (start_m + 1) * BLOCK_M, BLOCK_N, loop_unroll_factor=num_unroll_request):
         start_n = tl.multiple_of(start_n, BLOCK_N)
+        tl.device_print("[SELF] start_n=", start_n)
+        tl.device_print("[SELF] q_len=", cur_batch_query_len)
+        tl.device_print("[SELF] block_mask=", block_mask)
         # ---- compute qk ----
         k = tl.load(k_ptrs + (cur_batch_in_all_start_index + start_n) * stride_kbs,
                     mask=dim_mask[:, None] & ((start_n + offs_n[None, :]) < cur_batch_query_len),
                     other=0.0)
 
         qk = tl.zeros([BLOCK_M, BLOCK_N], dtype=tl.float32)
-        qk = tl.dot(q, k, acc=qk, input_precision=IN_PRECISION)
+        qk += tl.dot(q, k, acc=qk, input_precision=IN_PRECISION)
         qk *= sm_scale
         
         # apply causal mask
@@ -193,6 +207,8 @@ def _fwd_kernel_d2f(Q, K, V, Mask,
         m_mask = (offs_m[:, None] < cur_batch_query_len) & ((start_n + offs_n[None, :]) < cur_batch_query_len)
         mask = tl.load(mask_ptrs, mask=m_mask, other=False)
         qk = tl.where(mask, qk, float("-inf"))
+        valid_cnt = tl.sum(mask, axis=1)
+        tl.device_print("[SELF] valid per-row row0=", valid_cnt)
         if SLIDING_WINDOW > 0:
             qk = tl.where(offs_m[:, None] - (start_n + offs_n[None, :]) < SLIDING_WINDOW, qk, -10000)
 
@@ -209,7 +225,7 @@ def _fwd_kernel_d2f(Q, K, V, Mask,
                     other=0.0)
         p = p.to(v.dtype)
 
-        acc = tl.dot(p, v, acc=acc, input_precision=IN_PRECISION)
+        acc += tl.dot(p, v, input_precision=IN_PRECISION)
         # update m_i and l_i
         l_i = l_i * alpha + l_ij
         m_i = m_ij
@@ -220,24 +236,10 @@ def _fwd_kernel_d2f(Q, K, V, Mask,
     off_o = (cur_batch_in_all_start_index + offs_m[:, None]) * stride_obs + cur_head * stride_oh + offs_d[None, :] * stride_od
     out_ptrs = Out + off_o
     tl.store(out_ptrs, acc, mask=dim_mask[None, :] & (offs_m[:, None] < cur_batch_query_len))
+    tl.device_print("\n\n", cur_batch)
     return
 
 
-# Here's an example autotuner config for this kernel. This config does provide
-# a performance improvement, but dramatically increases first call latency in
-# triton 3.2. Because of this tradeoff, it's currently commented out.
-# @triton.autotune(
-#     configs=[
-#         triton.Config({'BLOCK_M': 128, 'BLOCK_N': 64, \
-#                         "num_unroll_cache": 4, \
-#                         "num_unroll_request": 1 } | \
-#                         ({"kpack": 2, "waves_per_eu": 2} \
-#                             if current_platform.is_rocm() else {}), \
-#                         num_warps=4, \
-#                         num_stages=1)
-#     ],
-#     key=["BLOCK_SIZE", "MAX_Q_LEN", "MAX_CTX_LEN"]
-# )
 @triton.jit
 def _fwd_kernel(Q, K, V, 
                 K_cache, V_cache,
@@ -395,10 +397,8 @@ def _fwd_kernel(Q, K, V,
         l_i = l_i * alpha + l_ij
         m_i = m_ij
 
-    off_k = (offs_n[None, :] * stride_kbs + cur_kv_head * stride_kh +
-             offs_d[:, None] * stride_kd)
-    off_v = (offs_n[:, None] * stride_vbs + cur_kv_head * stride_vh +
-             offs_d[None, :] * stride_vd)
+    off_k = offs_n[None, :] * stride_kbs + cur_kv_head * stride_kh + offs_d[:, None] * stride_kd
+    off_v = offs_n[:, None] * stride_vbs + cur_kv_head * stride_vh + offs_d[None, :] * stride_vd
     k_ptrs = K + off_k
     v_ptrs = V + off_v
 
@@ -516,12 +516,9 @@ def _fwd_kernel_flash_attn_v2(
     offs_n = tl.arange(0, BLOCK_N)
     offs_d = tl.arange(0, BLOCK_DMODEL)
     offs_m = start_m * BLOCK_M + tl.arange(0, BLOCK_M)
-    off_q = ((cur_batch_in_all_start_index + offs_m[:, None]) * stride_qbs +
-             cur_head * stride_qh + offs_d[None, :] * stride_qd)
+    off_q = (cur_batch_in_all_start_index + offs_m[:, None]) * stride_qbs + cur_head * stride_qh + offs_d[None, :] * stride_qd
 
-    q = tl.load(Q + off_q,
-                mask=offs_m[:, None] < cur_batch_seq_len - cur_batch_ctx_len,
-                other=0.0)
+    q = tl.load(Q + off_q, mask=offs_m[:, None] < cur_batch_seq_len - cur_batch_ctx_len, other=0.0)
 
     # # initialize pointer to m and l
     m_i = tl.zeros([BLOCK_M], dtype=tl.float32) - float("inf")
@@ -1022,8 +1019,8 @@ def context_attention_fwd(q,
     if current_platform.is_rocm():
         extra_kargs = {"kpack": 2, "waves_per_eu": 2}
 
-    grid = lambda META: (batch, head, triton.cdiv(max_input_len, META["BLOCK_M"]))
     if diffusion_blk_sz is None:
+        grid = lambda META: (batch, head, triton.cdiv(max_input_len, META["BLOCK_M"]))
         _fwd_kernel[grid](
             q, k, v,
             k_cache, v_cache,
@@ -1057,7 +1054,9 @@ def context_attention_fwd(q,
             **extra_kargs)
     else:
         # FIXME: computation not correct
-        _fwd_kernel_d2f[grid](
+        BLOCK_M = BLOCK_N = diffusion_blk_sz * 2
+        GRID = (batch, head, triton.cdiv(max_input_len, BLOCK_M))
+        _fwd_kernel_d2f[GRID](
             q, k, v, mask,
             k_cache, v_cache,
             b_loc,
@@ -1080,8 +1079,8 @@ def context_attention_fwd(q,
             BLOCK_DMODEL_PADDED=Lk_padded,
             SLIDING_WINDOW=sliding_window,
             SKIP_DECODE=skip_decode,
-            BLOCK_M=diffusion_blk_sz*2,
-            BLOCK_N=diffusion_blk_sz*2,
+            BLOCK_M=BLOCK_M,
+            BLOCK_N=BLOCK_N,
             DIFFUSION_BLK_SZ=diffusion_blk_sz,
             num_unroll_cache=4,
             num_unroll_request=1,

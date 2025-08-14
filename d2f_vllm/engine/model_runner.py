@@ -61,7 +61,7 @@ class ModelRunnerBase(ABC):
                     print("Removed existing shared memory segment.")
                 except FileNotFoundError:
                     print("Shared memory segment does not exist, creating a new one.")
-                shm_size = 2**22 if self.model_type == "diffusion_lm" else 2**20
+                shm_size = 2**23 if self.model_type == "diffusion_lm" else 2**20
                 self.shm = SharedMemory(name="d2f_vllm", create=True, size=shm_size)
                 dist.barrier()
             else:

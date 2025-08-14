@@ -233,6 +233,7 @@ class SequenceForDiffusionLM(SequenceBase):
                 'status': block.status,
                 'global_start_id': block.global_start_id,
                 'global_end_id': block.global_end_id,
+                'cursor': block.cursor,
                 'mask_token_id': block.mask_token_id,
                 'size': block.size,
                 'is_prompt': block.is_prompt,
@@ -254,6 +255,7 @@ class SequenceForDiffusionLM(SequenceBase):
             "max_tokens": self.max_tokens,
             "ignore_eos": self.ignore_eos,
             "config": self.config,
+            "kv_cache_layout": self.kv_cache_layout,
             "eos_token_id": self.eos_token_id,
             "max_model_len": self.max_model_len,
             "mask_token_id": self.mask_token_id,
@@ -265,6 +267,7 @@ class SequenceForDiffusionLM(SequenceBase):
             "new_tokens": getattr(self, "new_tokens", 0),
             "block_mask": self.block_mask,
             "meet_eos": self.meet_eos,
+            "n_steps": self.n_steps,
         }
         return state
 
@@ -283,6 +286,7 @@ class SequenceForDiffusionLM(SequenceBase):
         self.meet_eos = state["meet_eos"]
 
         self.config = state["config"]
+        self.kv_cache_layout = state.get("kv_cache_layout", getattr(self.config, "kv_cache_layout", None))
         self.eos_token_id = state["eos_token_id"]
         self.max_model_len = state["max_model_len"]
         self.mask_token_id = state["mask_token_id"]
@@ -293,6 +297,10 @@ class SequenceForDiffusionLM(SequenceBase):
         self.input_num_prompt_tokens = state.get("input_num_prompt_tokens", 0)
         self.new_tokens = state.get("new_tokens", 0)
         self.block_mask = state.get("block_mask", None)
+        self.n_steps = state.get("n_steps", 0)
+        # Align tensor devices when sequence is reconstructed on a different rank
+        if self.block_mask is not None and self.block_mask.device.index != torch.cuda.current_device():
+            self.block_mask = self.block_mask.to(torch.cuda.current_device())
 
         self.diffusion_blocks = []
         pre_block = None
@@ -302,6 +310,7 @@ class SequenceForDiffusionLM(SequenceBase):
                 status=block_state["status"],
                 global_start_id=block_state["global_start_id"],
                 global_end_id=block_state["global_end_id"],
+                cursor=block_state.get("cursor", 0),
                 mask_token_id=block_state["mask_token_id"],
                 size=block_state["size"],
                 is_prompt=block_state["is_prompt"],
@@ -322,8 +331,8 @@ class SequenceForDiffusionLM(SequenceBase):
                 f"num_prompt_tokens={self.num_prompt_tokens}, num_cached_tokens={self.num_cached_tokens}, "
                 f"temperature={self.temperature}, max_tokens={self.max_tokens}, ignore_eos={self.ignore_eos}, "
                 f"diffusion_block_size={self.diffusion_block_size}, "
-                f"block_mask={self.block_mask.shape}, "
-                f"input_token_ids={self.input_token_ids}, input_num_tokens={self.input_num_tokens})")
+                f"block_mask={(self.block_mask.shape if self.block_mask is not None else None)}, "
+                f"input_token_ids={getattr(self, 'input_token_ids', None)}, input_num_tokens={getattr(self, 'input_num_tokens', None)})")
     
     @property
     def num_completion_tokens(self) -> int:
@@ -443,7 +452,10 @@ class SequenceForDiffusionLM(SequenceBase):
                     diff_blk.to_cache()
                 else:
                     break
-    
+                
+    def set_layout(self, layout: str) -> None:
+        self.kv_cache_layout = layout
+
     @property
     def current_block_mask(self) -> torch.Tensor:
         if self.kv_cache_layout == "distinct":
@@ -455,7 +467,7 @@ class SequenceForDiffusionLM(SequenceBase):
         if is_prefill:
             num_tokens = self.num_tokens
             mask_shape = (1, 1, num_tokens, num_tokens)
-            block_wise_causal_mask = torch.zeros(mask_shape, dtype=torch.bool, device="cuda")
+            block_wise_causal_mask = torch.zeros(mask_shape, dtype=torch.bool, device=torch.cuda.current_device())
             block_wise_causal_mask[..., :self.input_num_tokens, :self.input_num_tokens] = True
             num_diffusion_blocks = (num_tokens - self.input_num_tokens + self.diffusion_block_size - 1) // self.diffusion_block_size
             for block_id in range(num_diffusion_blocks):
@@ -466,12 +478,12 @@ class SequenceForDiffusionLM(SequenceBase):
                 block_wise_causal_mask[..., start_h:end_h, start_w:end_w] = True
             self.block_mask = block_wise_causal_mask.clone()
         else:
+            assert self.block_mask is not None, "block_mask must exist before incremental update"
+            dev = self.block_mask.device
             left_shape = (1, 1, self.num_tokens - self.diffusion_block_size, self.diffusion_block_size)
             down_shape = (1, 1, self.diffusion_block_size, self.num_tokens)
-            
-            left_cat_tensor = torch.zeros(left_shape, dtype=torch.bool, device="cuda")
-            down_cat_tensor = ~torch.zeros(down_shape, dtype=torch.bool, device="cuda")
-            
+            left_cat_tensor = torch.zeros(left_shape, dtype=torch.bool, device=dev)
+            down_cat_tensor = ~torch.zeros(down_shape, dtype=torch.bool, device=dev)
             self.block_mask = torch.cat([self.block_mask, left_cat_tensor], dim=-1)
             self.block_mask = torch.cat([self.block_mask, down_cat_tensor], dim=-2)
 

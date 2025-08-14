@@ -65,8 +65,8 @@ if __name__ == "__main__":
     o = torch.empty_like(q).to("cuda").to(precision)
 
     s = time.time()
-    NSTEPS = 120
-    NLayers = 28
+    NSTEPS = 1 
+    NLayers = 1 
     T = NSTEPS * NLayers
     for _ in tqdm(range(T)):
         diffusion_lm_parallel_flash_decoding(

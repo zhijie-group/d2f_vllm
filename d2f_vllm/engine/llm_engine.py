@@ -61,9 +61,9 @@ class LLMEngine:
         n_diff_steps = self.scheduler.postprocess(seqs, sample_output)
         outputs = [(seq.seq_id, seq.completion_token_ids) for seq in seqs if seq.is_finished]
         if self.engine_type == "causal_lm":
-            num_tokens = sum(len(seq) for seq in seqs) if is_prefill else -len(seqs)
+            num_tokens = sum(len(seq) for seq in seqs) if is_prefill else len(seqs)
         else:
-            num_tokens = sum(seq.diffusion_num_tokens for seq in seqs) if is_prefill else sum(seq.new_tokens for seq in seqs)
+            num_tokens = sum(seq.input_num_tokens + seq.new_tokens for seq in seqs) if is_prefill else sum(seq.new_tokens for seq in seqs)
         return outputs, num_tokens, is_prefill, n_diff_steps
 
     def is_finished(self):

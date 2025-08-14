@@ -12,48 +12,37 @@ import triton
 
 import triton.language as tl
 
-
-@triton.jit
-def _dlm_fd_inner_kv_cache(Q_i, K_j, V_j, acc, m_i, l_i, softmax_scale,
-                           BLOCK_M: tl.constexpr, BLOCK_SIZE: tl.constexpr):
-    S_ij = tl.zeros([BLOCK_M, BLOCK_SIZE], dtype=tl.float32)
-    S_ij += tl.dot(Q_i, K_j) * softmax_scale
-        
-    m_ij = tl.maximum(m_i, tl.max(S_ij, axis=1))
-    P_ij = tl.exp(S_ij - m_ij[:, None])
-    
-    alpha = tl.exp(m_i - m_ij)
-    l_ij = alpha * l_i + tl.sum(P_ij, axis=1)
-    
-    P_ij = P_ij.to(V_j.type.element_ty)
-    acc = alpha[:, None] * acc + tl.dot(P_ij, V_j)
-    
-    l_i = l_ij
-    m_i = m_ij
-    
-    return acc, m_i, l_i
+from d2f_vllm.utils.context import ContextForDiffusionLM
 
 
-@triton.jit
-def _dlm_fd_inner_self(Q_i, K_j, V_j, Mask, acc, m_i, l_i, softmax_scale,
-                       BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr):
-    S_ij = tl.zeros([BLOCK_M, BLOCK_N], dtype=tl.float32)
-    S_ij += tl.dot(Q_i, K_j) * softmax_scale
-    S_ij += tl.where(Mask, 0.0, float('-inf'))
-        
-    m_ij = tl.maximum(m_i, tl.max(S_ij, axis=1))
-    P_ij = tl.exp(S_ij - m_ij[:, None])
+def CHECK_ATTENTION(o: torch.Tensor, q: torch.Tensor, k_new: torch.Tensor, v_new: torch.Tensor,
+                    k_cache: torch.Tensor, v_cache: torch.Tensor, context: ContextForDiffusionLM):
+    """
+    Check the attention output against the input tensors.
+    """
+    from einops import rearrange
+    from torch.nn.functional import scaled_dot_product_attention as sdpa
+    from torch.nn.attention import SDPBackend, sdpa_kernel
     
-    alpha = tl.exp(m_i - m_ij)
-    l_ij = alpha * l_i + tl.sum(P_ij, axis=1)
+    from d2f_vllm.layers.attention.ops import load_kvcache
     
-    P_ij = P_ij.to(V_j.type.element_ty)
-    acc = alpha[:, None] * acc + tl.dot(P_ij, V_j)
+    torch.backends.cuda.matmul.allow_tf32 = False
+    torch.backends.cudnn.allow_tf32 = False
     
-    l_i = l_ij
-    m_i = m_ij
+    h_dim = v_cache.shape[-2]
+    x = k_cache.shape[-1]
+    k_cache_unified = rearrange(k_cache, "b h n s x -> b s h (n x)", n=h_dim // x, x=x).contiguous()
+    v_cache_unified = rearrange(v_cache, "b h d s -> b s h d").contiguous()
     
-    return acc, m_i, l_i
+    transpose_fn = lambda x: rearrange(x, 's h d -> 1 h s d').contiguous()
+    k, v = load_kvcache(k_cache_unified, v_cache_unified, context, k_new, v_new)
+    q, k, v = map(transpose_fn, (q, k, v))
+    mask = context.block_mask_for_checking
+    with sdpa_kernel(SDPBackend.MATH):
+        ref_o = sdpa(q, k, v, attn_mask=mask, enable_gqa=True)
+    
+    ref_o = rearrange(ref_o, '1 h s d -> s h d')
+    assert torch.allclose(o, ref_o, atol=1e-3, rtol=1e-3), "Attention output does not match reference!"
 
 
 @triton.jit
