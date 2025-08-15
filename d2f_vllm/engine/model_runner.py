@@ -505,7 +505,7 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
         seq_lens = []
         seq_id_to_queue_id = {}
         need_kv_cache_store = False
-        if sum(len(seq.diffusion_decoding_inputs()[0]) for seq in seqs) == 1120:
+        if sum(len(seq.diffusion_decoding_inputs()[0]) for seq in seqs) == 1280:
             pass
         for seq_idx_in_queue, seq in enumerate(seqs): 
             seq_id = seq.seq_id
@@ -526,7 +526,7 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
 
             mem_block_to_diffusion_blocks_map = seq.mem_block_to_diffusion_blocks_map
             context_len = context_lens[seq_id_to_queue_id[seq_id]]
-            blk_idx_start = seq.num_cached_blocks - 1
+            blk_idx_start = max(0, seq.num_cached_blocks - 1)
             blk_idx_end = seq.num_blocks
             for mem_block_idx in range(blk_idx_start, blk_idx_end):
                 start_idx = mem_block_idx * seq.block_size
@@ -563,7 +563,12 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
                         meet_active_block = True
                         
                 if meet_active_block:
-                    padding_slots = [-1] * sum(seq.active_blocks) * seq.diffusion_block_size
+                    try:
+                        first_active_idx = next(i for i, is_active in enumerate(seq.active_blocks) if is_active)
+                        num_blocks_to_pad = len(seq.active_blocks) - first_active_idx
+                    except StopIteration:
+                        num_blocks_to_pad = 0
+                    padding_slots = [-1] * (num_blocks_to_pad * seq.diffusion_block_size)
                     slot_mapping.extend(padding_slots)
                     break
         

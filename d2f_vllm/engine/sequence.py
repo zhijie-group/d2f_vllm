@@ -412,7 +412,8 @@ class SequenceForDiffusionLM(SequenceBase):
         for block_id in range(self.num_blocks):
             window_start = block_id * self.block_size
             window_length = self.block_size if block_id < self.num_blocks - 1 else self.last_block_num_tokens
-            mapping.append([self.token_to_diffusion_block_id(token_id) for token_id in range(window_start, window_start + window_length)]) # build up token-wise mapping
+            mapping.append([self.token_to_diffusion_block_id(token_id) 
+                            for token_id in range(window_start, window_start + window_length)]) # build up token-wise mapping
         return mapping
     
     def token_to_diffusion_block_id(self, token_id: int) -> int:

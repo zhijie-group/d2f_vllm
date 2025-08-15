@@ -96,7 +96,7 @@ class Attention(nn.Module):
         if k_cache.numel() and v_cache.numel():
             if not (self.model_type == 'diffusion_lm' and not context.need_kv_cache_store):
                 store_kvcache = store_kvcache_unified_layout if is_unified_layout else store_kvcache_distinct_layout
-                store_kvcache(k, v, k_cache, v_cache, context.slot_mapping, self.model_type)
+                store_kvcache(k, v, k_cache, v_cache, context.slot_mapping, self.model_type, context)
                 # CHECK_STORING(k_cache, v_cache, k, v, context)
 
         transpose_fn = lambda x: rearrange(x, 's h d -> 1 h s d').contiguous()

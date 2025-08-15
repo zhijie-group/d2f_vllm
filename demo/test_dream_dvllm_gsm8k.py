@@ -38,7 +38,7 @@ def summarize_profiling(csv_path: str) -> dict:
 if __name__ == "__main__":
     model = "/data1/ckpts/Dream-org/Dream-v0-Base-7B"
     LLM = LLM(
-        model, 
+        model,
         lora_path="lora_weight/Decoder-ddt_test-20k",
         use_lora=True,
         model_name="dream", 

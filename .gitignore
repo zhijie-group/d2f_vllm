@@ -27,3 +27,4 @@ lora_weight*
 log/
 dist/
 build/
+cache/
