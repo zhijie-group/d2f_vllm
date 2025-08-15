@@ -505,8 +505,6 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
         seq_lens = []
         seq_id_to_queue_id = {}
         need_kv_cache_store = False
-        if sum(len(seq.diffusion_decoding_inputs()[0]) for seq in seqs) == 1280:
-            pass
         for seq_idx_in_queue, seq in enumerate(seqs): 
             seq_id = seq.seq_id
             seq_id_to_queue_id[seq_id] = seq_idx_in_queue
@@ -524,54 +522,32 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
             cu_seqlens_q.append(cu_seqlens_q[-1] + seqlen_q)
             cu_seqlens_k.append(cu_seqlens_k[-1] + seqlen_k)
 
-            mem_block_to_diffusion_blocks_map = seq.mem_block_to_diffusion_blocks_map
-            context_len = context_lens[seq_id_to_queue_id[seq_id]]
-            blk_idx_start = max(0, seq.num_cached_blocks - 1)
-            blk_idx_end = seq.num_blocks
-            for mem_block_idx in range(blk_idx_start, blk_idx_end):
-                start_idx = mem_block_idx * seq.block_size
-                end_idx = start_idx + seq.block_size
-                cur_map = mem_block_to_diffusion_blocks_map[mem_block_idx]
-                is_last_block = False
-                meet_active_block = False
-                while start_idx < end_idx and not is_last_block and not meet_active_block:
-                    local_start_idx = lambda: start_idx % seq.block_size
-                    diffusion_block = seq.diffusion_blocks[cur_map[local_start_idx()]]
-                    if cur_map[local_start_idx()] == seq.num_diffusion_blocks - 1:
-                        is_last_block = True
-                    get_step = lambda diff_blk: (
-                        diff_blk.remaining_length
-                        if diff_blk.remaining_length + local_start_idx() <= seq.block_size
-                        else seq.block_size - local_start_idx()
-                    )
-                    if diffusion_block.is_in_cache:
-                        step = get_step(diffusion_block)
-                        diffusion_block.cursor += step
-                        start_idx += step
-                    elif diffusion_block.is_to_cache:
-                        step = get_step(diffusion_block)
-                        diffusion_block.cursor += step
-                        cur_diffusion_block_start = 0
-                        cur_diffusion_block_end = step
-                        start_idx += step
-                        mem_block_start = seq.block_table[mem_block_idx] * self.block_size + context_len % seq.block_size
-                        context_len += step
-                        slot_mapping.extend(list(range(mem_block_start + cur_diffusion_block_start,
-                                                       mem_block_start + cur_diffusion_block_end)))
-                        need_kv_cache_store = True
-                    elif diffusion_block.is_active:
-                        meet_active_block = True
-                        
-                if meet_active_block:
-                    try:
-                        first_active_idx = next(i for i, is_active in enumerate(seq.active_blocks) if is_active)
-                        num_blocks_to_pad = len(seq.active_blocks) - first_active_idx
-                    except StopIteration:
-                        num_blocks_to_pad = 0
-                    padding_slots = [-1] * (num_blocks_to_pad * seq.diffusion_block_size)
-                    slot_mapping.extend(padding_slots)
+            num_cached_tokens = seq.cached_num_tokens
+            cur_num_cached_blocks = lambda: (num_cached_tokens + self.block_size - 1) // self.block_size
+            for idx in range(seq.num_diffusion_blocks):
+                if seq.active_blocks[idx]:
+                    padding_num_tokens = seq.diffusion_block_size * (seq.num_diffusion_blocks - idx)
+                    slot_mapping.extend([-1] * padding_num_tokens)
                     break
-        
+                elif seq.to_cache_blocks[idx]:
+                    cur_blk_idx = seq.block_table[cur_num_cached_blocks() - 1]
+                    cur_blk_start_idx = cur_blk_idx * seq.block_size
+                    cur_blk_ctx = num_cached_tokens - (cur_num_cached_blocks() - 1) * seq.block_size
+                    cur_diff_blk_start_idx = cur_blk_start_idx + cur_blk_ctx
+                    if cur_diff_blk_start_idx + seq.diffusion_block_size > (cur_blk_idx + 1) * seq.block_size:
+                        # crossing pages
+                        cur_blk_remaining_tokens = cur_num_cached_blocks() * seq.block_size - num_cached_tokens
+                        next_blk_adding_tokens = seq.diffusion_block_size - cur_blk_remaining_tokens
+                        next_blk_idx = seq.block_table[cur_num_cached_blocks()]
+                        next_blk_start_idx = next_blk_idx * seq.block_size
+                        num_cached_tokens += seq.diffusion_block_size
+                        slot_mapping.extend(list(range(cur_diff_blk_start_idx, cur_diff_blk_start_idx + cur_blk_remaining_tokens)))
+                        slot_mapping.extend(list(range(next_blk_start_idx, next_blk_start_idx + next_blk_adding_tokens)))
+                    else:
+                        # not crossing pages
+                        num_cached_tokens += seq.diffusion_block_size
+                        slot_mapping.extend(list(range(cur_diff_blk_start_idx, cur_diff_blk_start_idx + seq.diffusion_block_size)))
+
         input_ids = torch.tensor(input_ids, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
         positions = torch.tensor(positions, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
         seq_lens_ts = torch.tensor(seq_lens, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)

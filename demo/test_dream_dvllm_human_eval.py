@@ -56,7 +56,7 @@ if __name__ == "__main__":
     tokenizer = LLM.tokenizer
     sampling_params = SamplingParams(temperature=0.0, max_tokens=256)
     
-    dataset = load_dataset("/data1/LargeData/openai/openai_humaneval")["test"]['prompt']
+    dataset = load_dataset("/data1/LargeData/openai/openai_humaneval")["test"]['prompt'][:20]
     prompts = [tokenizer.bos_token + p for p in dataset]
     
     output_file = "log/profiles/perf_dvllm_dream_7B.json"
