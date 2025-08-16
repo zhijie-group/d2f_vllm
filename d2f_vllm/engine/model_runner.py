@@ -36,18 +36,21 @@ class ModelRunnerBase(ABC):
         self.event = event
 
         # Initialize model, sampler, and kv cache
-        dist.init_process_group("nccl", "tcp://localhost:2333", world_size=self.world_size, rank=rank)
-        torch.cuda.set_device(rank)
+        init_method = f"tcp://{config.master_addr}:{config.master_port}"
+        dist.init_process_group("nccl", init_method, world_size=self.world_size, rank=rank)
+        device_id = (getattr(config, "device_start", 0) or 0) + rank
+        assert 0 <= device_id < torch.cuda.device_count(), f"Invalid device_id {device_id}."
+        torch.cuda.set_device(device_id)
         default_dtype = torch.get_default_dtype()
         torch.set_default_dtype(hf_config.torch_dtype)
-        torch.set_default_device("cuda")
+        torch.set_default_device(f"cuda:{device_id}")
         self.model = AutoModelLM.from_config(config)
         self.sampler = AutoSampler.from_config(config)
         self.warmup_model()
-        self.allocate_kv_cache() # NOCHANGE
+        self.allocate_kv_cache()  # NOCHANGE
         if not self.enforce_eager:
             self.capture_cudagraph()
-        
+
         # Allocate shared memory for inter-process communication
         # NOCHANGE
         torch.set_default_device("cpu")
@@ -55,18 +58,17 @@ class ModelRunnerBase(ABC):
         if self.world_size > 1:
             if rank == 0:
                 try:
-                    shm = SharedMemory(name="d2f_vllm")
+                    shm = SharedMemory(name=config.shm_name)
                     shm.close()
                     shm.unlink()
-                    print("Removed existing shared memory segment.")
                 except FileNotFoundError:
-                    print("Shared memory segment does not exist, creating a new one.")
+                    pass
                 shm_size = 2**23 if self.model_type == "diffusion_lm" else 2**20
-                self.shm = SharedMemory(name="d2f_vllm", create=True, size=shm_size)
+                self.shm = SharedMemory(name=config.shm_name, create=True, size=shm_size)
                 dist.barrier()
             else:
                 dist.barrier()
-                self.shm = SharedMemory(name="d2f_vllm")
+                self.shm = SharedMemory(name=config.shm_name)
                 self.loop()
 
     def exit(self):
@@ -569,7 +571,6 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
                     break
         
         # CHECK_SLOT_MAPPING(seqs, slot_mapping)
-
         input_ids = torch.tensor(input_ids, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
         positions = torch.tensor(positions, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
         seq_lens_ts = torch.tensor(seq_lens, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)

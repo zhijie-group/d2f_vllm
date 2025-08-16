@@ -6,6 +6,7 @@ import pandas as pd
 
 from datasets import load_dataset
 from viztracer import VizTracer
+from transformers import AutoTokenizer
 
 from d2f_vllm import LLM, SamplingParams
 
@@ -43,6 +44,7 @@ if __name__ == "__main__":
         model_name="dream", 
         model_type="diffusion_lm",
         enforce_eager=True, 
+        data_parallel_size=2,
         tensor_parallel_size=1,
         gpu_memory_utilization=0.60,
         max_num_batched_tokens=1024,
@@ -53,7 +55,7 @@ if __name__ == "__main__":
         add_new_block_threshold=0.1,
         kv_cache_layout="unified"
     )
-    tokenizer = LLM.tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(model, trust_remote_code=True)
     sampling_params = SamplingParams(temperature=0.0, max_tokens=256)
     
     dataset = load_dataset("/data1/LargeData/openai/openai_humaneval")["test"]['prompt'][:]
