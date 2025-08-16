@@ -48,7 +48,7 @@
             "env": {
                 // "TORCHINDUCTOR_DISABLE": "1",
                 // "TRITON_INTERPRET": "1",
-                "CUDA_VISIBLE_DEVICES": "3,4`"
+                "CUDA_VISIBLE_DEVICES": "3,4"
             }
         },
         {
@@ -60,7 +60,7 @@
             "env": {
                 // "TORCHINDUCTOR_DISABLE": "1",
                 // "TRITON_INTERPRET": "1",
-                "CUDA_VISIBLE_DEVICES": "4,5"
+                "CUDA_VISIBLE_DEVICES": "3,4"
             }
         },
         {

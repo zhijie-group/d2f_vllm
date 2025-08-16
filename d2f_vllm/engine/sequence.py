@@ -400,7 +400,7 @@ class SequenceForDiffusionLM(SequenceBase):
     
     @property
     def num_cached_blocks(self) -> int:
-        return (self.cached_num_tokens + self.block_size - 1) // self.block_size
+        return (self.num_cached_tokens + self.block_size - 1) // self.block_size
 
     @property
     def diffusion_num_tokens(self) -> int:
