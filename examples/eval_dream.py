@@ -1,6 +1,6 @@
 import logging
 import gc
-import time  # 添加时间模块
+import time  # add time module
 import json
 from datetime import timedelta
 from typing import List, Optional, Tuple, Type, TypeVar, Union
@@ -16,7 +16,7 @@ from datasets import Dataset
 from packaging import version
 from tqdm import tqdm
 from peft import PeftConfig, PeftModel
-import numpy as np  # 添加numpy导入
+import numpy as np  # add numpy import
 
 from lm_eval import utils
 from lm_eval.api.instance import Instance
@@ -60,10 +60,10 @@ def create_full_block_attention_mask(prompt_length, max_length, block_size, devi
     if dtype is None:
         dtype = torch.bfloat16
     
-    # Initialize mask with -inf (no attention)
+    # initialize with -inf (no attention)
     attention_mask = torch.full((1, 1, max_length, max_length), -torch.inf, device=device, dtype=dtype)
     
-    # Block 0: Prompt (can see itself)
+    # Block 0: prompt (can see itself)
     attention_mask[:, :, :prompt_length, :prompt_length] = 0
     
     # Calculate the number of regular blocks after prompt
@@ -123,23 +123,23 @@ def build_custom_float_attention_mask(input_ids, prompt_length, block_size, devi
     # Use the provided dtype or default to float32
     if dtype is None:
         dtype = torch.float32
-    # 初始化为全 -inf
+    # initialize with -inf
     attn_mask = torch.full((B, 1, seq_len, seq_len), float('-inf'), dtype=dtype, device=device)
-    # 1. Prompt部分：每个token可以注意整个prompt
+    # 1. Prompt part: each token can attend to the entire prompt
     for i in range(B):
-        attn_mask[i, :, :, :prompt_length[i]] = 0.0  # 允许所有 token 看 prompt
+        attn_mask[i, :, :, :prompt_length[i]] = 0.0  # allow tokens to see the prompt
 
-        # 2. 块划分：从 prompt_length 开始划分 block
+        # 2. Block partitioning: split sequence into blocks starting from prompt_length
         num_blocks = (seq_len - prompt_length[i] + block_size - 1) // block_size
 
         for b in range(num_blocks):
             block_start = prompt_length[i] + b * block_size
             block_end = min(block_start + block_size, seq_len)
 
-            # 块内全注意
+            # full attention within block
             attn_mask[i, :, block_start:block_end, block_start:block_end] = 0.0
 
-            # 块之间因果注意（只能看前面块）
+            # causal attention between blocks (can see previous blocks only)
             for prev_b in range(b):
                 prev_start = prompt_length[i] + prev_b * block_size
                 prev_end = min(prev_start + block_size, seq_len)
@@ -187,7 +187,7 @@ def sample_tokens(logits, temperature=0.0, top_p=None, top_k=None, margin_confid
     else:
         initial_confidence, x0 = probs.max(dim=-1)
     
-    # 保存初始置信度
+    # save initial confidence
     confidence = initial_confidence.clone()
     
     if margin_confidence:
@@ -310,24 +310,24 @@ class DreamLoRA(LM):
         if isinstance(batch_size, str):
             self.batch_size_per_gpu = int(batch_size)
         
-        # 保存LoRA路径和block_size
+        # store LoRA path and block settings
         self.lora_path = lora_path
         self.block_size = block_size
-        self.block_add_threshold = block_add_threshold  # 新增block_add_threshold属性
-        self.skip_threshold = skip_threshold  # 新增skip_threshold属性
-        self.sampling_strategy = sampling_strategy  # 保存采样策略参数
-        self.decoded_token_threshold = decoded_token_threshold  # 新增解码token阈值属性
+        self.block_add_threshold = block_add_threshold
+        self.skip_threshold = skip_threshold
+        self.sampling_strategy = sampling_strategy
+        self.decoded_token_threshold = decoded_token_threshold
         self.save_dir = save_dir
         
-        # 添加指标追踪
+        # metrics tracking
         self.total_forward_passes = 0
         self.total_generated_tokens = 0
         self.total_prompts = 0
-        # 添加时间和token统计
+        # timing and token statistics
         self.total_generation_time = 0.0
-        self.total_block_tokens = 0  # 块数 * block_size
-        self.total_actual_tokens = 0  # 实际生成的token数（去掉EOS）
-        self.total_non_eos_tokens = 0  # 全部token中非EOS的token数
+        self.total_block_tokens = 0
+        self.total_actual_tokens = 0
+        self.total_non_eos_tokens = 0
         self.all_generation_times = []
         self.all_block_tokens = []
         self.all_actual_tokens = []
@@ -582,18 +582,18 @@ class DreamLoRA(LM):
                     'end_pos': prompt.shape[1],
                     'mask_count': 0,
                     'total_masks': prompt.shape[1],
-                    'state': 'to_cache',  # prompt立即准备缓存
-                    'is_complete': True,  # prompt始终为完全状态
+                    'state': 'to_cache',  # prompt is ready to be cached
+                    'is_complete': True,  # prompt is always complete
                 },
             }
             
-            # 初始化缓存
+            # initialize cache
             past_key_values = None
             last_logits = None
             
-            current_blocks = 0  # 活跃块数量
+            current_blocks = 0  # active block count
             step = 0
-            eos_detected = False  # EOS检测标志
+            eos_detected = False  # EOS detected flag
             
             while current_blocks >= 0:
                 step += 1
@@ -622,21 +622,21 @@ class DreamLoRA(LM):
                         }
                         current_blocks += 1
                 
-                # 在每次循环开头，更新块的完全/不完全状态
+                # update block completion states at loop start
                 self._update_block_completion_states(block_states, decoded_token_threshold)
-                # 检查是否还有mask token
+                # check for remaining mask tokens
                 mask_index = (x_t == mask_id)
                 if mask_index.sum() == 0 and current_blocks == 0:
                     break
                 
-                # 确定哪些块需要添加到缓存中
+                # determine which blocks to add to cache
                 blocks_to_cache = [bid for bid, state in block_states.items() 
                                 if state['state'] == 'to_cache']
                 
-                # 确定需要处理的部分
+                # determine the portion to process
                 cache_length = 0 if past_key_values is None else past_key_values.get_seq_length()
                 
-                # 确定需要添加到缓存的内容
+                # determine需要添加到缓存的内容
                 update_kvcache = 0
                 if blocks_to_cache:
                     # 找到最早需要缓存的块
@@ -650,7 +650,7 @@ class DreamLoRA(LM):
                     # 更新这个范围内所有块的缓存
                     update_kvcache = latest_pos - earliest_pos
                 
-                # 为前向传播创建输入序列
+                # build input sequence for forward pass
                 process_start_pos = cache_length
                 
                 if update_kvcache > 0:
@@ -659,10 +659,10 @@ class DreamLoRA(LM):
                     input_seq = x_t[:, block_states[earliest_block_to_cache]['start_pos']:]
                     process_start_pos = block_states[earliest_block_to_cache]['start_pos']
                 else:
-                    # 只处理活跃块
+                    # otherwise only process active blocks
                     active_blocks = [bid for bid, state in block_states.items() if state['state'] == 'active']
                     if active_blocks:
-                        # 获取缓存后的所有活跃块
+                        # find active blocks after cache
                         earliest_active_after_cache = float('inf')
                         for bid in active_blocks:
                             if block_states[bid]['start_pos'] >= cache_length:
@@ -674,20 +674,20 @@ class DreamLoRA(LM):
                         else:
                             # 没有缓存后的活跃块，这不应该发生
                             input_seq = x_t[:, cache_length:]
-                            # 如果缓存长度已经等于或超过序列长度，退出
+                            # if cache length >= sequence length, exit
                             if cache_length >= x_t.shape[1]:
                                 print(f"Cache length ({cache_length}) >= sequence length ({x_t.shape[1]}) at step {step}. Exiting generation loop.")
                                 raise Exception("Cache length >= sequence length")
                     else:
-                        # 没有活跃块，但可能在下一次迭代中有块要缓存
+                        # no active blocks, maybe blocks to cache in next iteration
                         break
                 
-                # 检查input_seq是否为空
+                # check if input_seq is empty
                 if input_seq.shape[1] == 0:
                     print(f"Warning: input_seq is empty at step {step}. Breaking generation loop.")
                     raise Exception("input_seq is empty")
                 
-                # 从预生成的完整mask中提取当前输入的attention mask
+                # extract attention mask for current input from pre-generated full mask
                 input_length = input_seq.shape[1]
                 attention_mask = extract_attention_mask(
                     full_mask=full_attention_mask,
@@ -705,23 +705,23 @@ class DreamLoRA(LM):
                     update_kvcache=update_kvcache,
                 )
                 
-                # 如果需要，更新缓存
+                # update cache if needed
                 if update_kvcache > 0:
-                    # 存储最后一个位置的logits，用于下一个token预测
+                    # store last logits for next token prediction
                     cache_end_idx = update_kvcache - 1
                     last_logits = outputs.logits[:, cache_end_idx, :].unsqueeze(1)
                     
-                    # 更新缓存
+                    # update past_key_values
                     past_key_values = outputs.past_key_values
                     
-                    # 将块标记为已缓存
+                    # mark blocks as cached
                     for block_id in blocks_to_cache:
                         block_states[block_id]['state'] = 'in_cache'
                 
-                # 获取用于预测的正确偏移logits
+                # get shifted logits for correct prediction offset
                 logits = self._shift_logits(outputs.logits, last_logit=last_logits)
                 
-                # 处理每个活跃块的mask token
+                # process mask tokens for each active block
                 blocks_to_deactivate = []
                 
                 for block_id in sorted(block_states.keys()):
@@ -735,12 +735,12 @@ class DreamLoRA(LM):
                     block_mask_index[:, :block_start] = False
                     block_mask_index[:, block_end:] = False
 
-                    #如果当前块没有mask则跳过
+                    # if no mask tokens in current block, skip
                     if block_mask_index.sum() == 0:
                         blocks_to_deactivate.append(block_id)
                         continue
                     
-                    # 计算logits的相对位置
+                    # compute relative position of logits
                     logit_offset = block_start - process_start_pos
                     block_rel_positions = torch.where(block_mask_index[0, block_start:block_end])[0]
                     
@@ -748,7 +748,7 @@ class DreamLoRA(LM):
                         # 获取masked位置的logits
                         block_mask_logits = logits[:, logit_offset + block_rel_positions, :]
                     
-                        # 采样tokens
+                        # sample tokens
                         confidence, x0, initial_confidence = sample_tokens(
                             block_mask_logits.squeeze(0), 
                             self.temperature, 
@@ -778,7 +778,7 @@ class DreamLoRA(LM):
                             high_conf_indices = torch.where(initial_confidence > skip_threshold)[0]
                             all_indices = high_conf_indices
                         
-                        # 更新tokens
+                        # update tokens
                         if len(all_indices) > 0:
                             x0_ = torch.zeros_like(x0, device=self.device, dtype=torch.long) + mask_id
                             x0_[all_indices] = x0[all_indices].clone()
@@ -788,10 +788,10 @@ class DreamLoRA(LM):
                                 abs_pos = block_start + block_rel_positions[idx]
                                 x_t[0, abs_pos] = x0_[idx]
                             
-                            # 更新块状态
+                            # update block state
                             block_states[block_id]['mask_count'] -= len(all_indices)
                             
-                            # 检查EOS token
+                            # check EOS token
                             eos_token_id = self.tokenizer.eos_token_id
                             if eos_token_id is not None:
                                 for idx in all_indices:
@@ -808,7 +808,7 @@ class DreamLoRA(LM):
                         blocks_to_deactivate.append(block_id)
                         continue
                 
-                # 停用已完成的块并标记它们在下一次迭代中缓存
+                # deactivate completed blocks and mark them to be cached next iteration
                 for block_id in blocks_to_deactivate:
                     if block_states[block_id]['state'] == 'active':
                         # 检查前面所有块是否都已经是非active状态
@@ -824,23 +824,23 @@ class DreamLoRA(LM):
                             current_blocks -= 1
                         # 如果前面有active块，保持当前块为active状态（不做任何操作）
 
-                # 安全检查
+                # safety check
                 if step > 10000:
                     print(f"WARNING: Hit safety check at step {step}. Exiting generation loop.")
                     break
         
-        # 先计算完整生成序列的非EOS token数
+        # compute non-EOS token count for full generated sequence
         generated_sequence = x_t[0, prompt.shape[1]:].tolist()
         non_eos_tokens = self._count_non_eos_tokens_before_truncation(
             x_t[0].tolist(), prompt.shape[1]
         )
         
-        # 累积到总token数
+        # accumulate to total token count
         if not hasattr(self, 'total_generated_tokens'):
             self.total_generated_tokens = 0
         self.total_generated_tokens += non_eos_tokens
         
-        # 生成EOS截断后的响应文本（与其他文件逻辑一致）
+        # produce response text truncated at EOS (consistent with other code)
         response = self.tokenizer.decode(generated_sequence).split(self.tokenizer.eos_token)[0]
         
         return response
@@ -913,23 +913,23 @@ class DreamLoRA(LM):
         end_time = time.time()
         total_time = end_time - start_time
         
-        # 累积统计数据
+        # aggregate metrics
         num_tokens = self.total_generated_tokens
-        num_nfe = self.diffusion_steps * len(requests)  # 估算NFE
+        num_nfe = self.diffusion_steps * len(requests)
         
-        # 保存最终统计结果
+        # build final statistics
         final_stats = {
-            'processed_samples': len(requests),
+            'processed_samples': len(res),
             'total_samples': len(requests),
-            'total_tokens': num_tokens,
-            'total_nfe': num_nfe,
+            'total_tokens': int(num_tokens),
+            'total_nfe': int(num_nfe),
             'total_time': total_time,
             'tokens_per_second': num_tokens / total_time if total_time > 0 else 0,
             'nfe_per_token': num_nfe / num_tokens if num_tokens > 0 else 0,
-            'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
+            'timestamp': time.time(),
         }
-        
-        # 保存统计结果到文件
+
+        # save statistics to files
         if self.save_dir is not None:
             import os
             os.makedirs(self.save_dir, exist_ok=True)
@@ -940,23 +940,23 @@ class DreamLoRA(LM):
                 for r in res:
                     f.write(json.dumps(r, ensure_ascii=False) + '\n')
             
-            # 保存统计结果
+            # save statistics
             stats_path = os.path.join(self.save_dir, f'rank_{self.rank}_final_stats.json')
             with open(stats_path, 'w', encoding='utf-8') as f:
                 json.dump(final_stats, f, ensure_ascii=False, indent=2)
         
-        # 打印最终统计结果
+        # print final statistics
         print("\n" + "="*60)
-        print("=== 最终统计结果 ===")
+        print("=== Final statistics ===")
         print("="*60)
-        print(f"处理样本数: {final_stats['processed_samples']}")
-        print(f"总样本数: {final_stats['total_samples']}")
-        print(f"总token数: {final_stats['total_tokens']}")
-        print(f"总NFE数: {final_stats['total_nfe']}")
-        print(f"总时间: {final_stats['total_time']:.4f}秒")
-        print(f"Token/秒: {final_stats['tokens_per_second']:.2f}")
+        print(f"Processed samples: {final_stats['processed_samples']}")
+        print(f"Total samples: {final_stats['total_samples']}")
+        print(f"Total tokens: {final_stats['total_tokens']}")
+        print(f"Total NFE: {final_stats['total_nfe']}")
+        print(f"Total time: {final_stats['total_time']:.4f} sec")
+        print(f"Tokens/sec: {final_stats['tokens_per_second']:.2f}")
         print(f"NFE/Token: {final_stats['nfe_per_token']:.4f}")
-        print(f"完成时间: {final_stats['timestamp']}")
+        print(f"Finished at: {final_stats['timestamp']}")
         print("="*60)
 
         return res

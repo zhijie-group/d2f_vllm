@@ -1,7 +1,7 @@
 import logging
 import gc
 import json
-import time  # 添加时间模块
+import time  # add time module
 from datetime import timedelta
 from typing import List, Optional, Tuple, Type, TypeVar, Union, Dict
 import torch
@@ -18,11 +18,11 @@ from datasets import Dataset
 from packaging import version
 from tqdm import tqdm
 from peft import PeftConfig, PeftModel
-import numpy as np  # 添加numpy导入
+import numpy as np  # add numpy import
 import os
 import jinja2
 
-# 导入LLaDA模型相关模块
+# import LLaDA model modules
 from model_cache.llada.modeling_llada import LLaDAModelLM
 from model_cache.llada.configuration_llada import LLaDAConfig
 
@@ -126,9 +126,9 @@ def build_custom_float_attention_mask(input_ids, prompt_length, block_size, devi
     # Use the provided dtype or default to float32
     if dtype is None:
         dtype = torch.float32
-    # 初始化为全 -inf
+    # initialize with all -inf
     attn_mask = torch.full((B, 1, seq_len, seq_len), float('-inf'), dtype=dtype, device=device)
-    # 1. Prompt部分：每个token可以注意整个prompt
+    # 1. Prompt part: each token can attend to the entire prompt
     for i in range(B):
         attn_mask[i, :, :, :prompt_length[i]] = 0.0  # 允许所有 token 看 prompt
 
@@ -139,15 +139,13 @@ def build_custom_float_attention_mask(input_ids, prompt_length, block_size, devi
             block_start = prompt_length[i] + b * block_size
             block_end = min(block_start + block_size, seq_len)
 
-            # 块内全注意
+            # full attention within block
             attn_mask[i, :, block_start:block_end, block_start:block_end] = 0.0
 
-            # 块之间因果注意（只能看前面块）
+            # causal attention between blocks (can only see previous blocks)
             for prev_b in range(b):
                 prev_start = prompt_length[i] + prev_b * block_size
                 prev_end = min(prev_start + block_size, seq_len)
-
-                # 当前块可以看前面块
                 attn_mask[i, :, block_start:block_end, prev_start:prev_end] = 0.0
 
     return attn_mask
@@ -948,12 +946,12 @@ class LLaDALoRA(TemplateLM):
         if self.show_speed:
             final_time = time.time()
             total_time = final_time - start_time
-            print(f"\n=== 最终统计结果 ===")
-            print(f"处理样本数: {len(res)}")
-            print(f"总token数: {num_tokens}")
-            print(f"总时间: {total_time:.2f}秒")
-            print(f"吞吐量: {num_tokens / total_time:.2f} tokens/s")
-            print(f"总NFE: {num_nfe}")
+            print(f"\n=== Final statistics ===")
+            print(f"Processed samples: {len(res)}")
+            print(f"Total tokens: {num_tokens}")
+            print(f"Total time: {total_time:.2f} sec")
+            print(f"Throughput: {num_tokens / total_time:.2f} tokens/s")
+            print(f"Total NFE: {num_nfe}")
         
         return res
 

@@ -1,0 +1,19 @@
+site_name: D2F
+site_description: Documentation for the D2F repository
+# Replace <your-org> below with your GitHub org or username
+site_url: https://<your-org>.github.io/D2F
+repo_url: https://github.com/zhijie-group/D2F
+theme:
+  name: material
+nav:
+  - Home: index.md
+  - Usage: usage.md
+  - API: api.md
+markdown_extensions:
+  - toc:
+      permalink: true
+  - fenced_code
+plugins:
+  - search
+site_dir: site
+use_directory_urls: true
