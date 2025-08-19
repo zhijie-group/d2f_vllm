@@ -473,13 +473,16 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
             
             if not seq.block_table:
                 continue
-            for i in range(seq.num_cached_blocks, seq.num_prompt_blocks):
-                start = seq.block_table[i] * self.block_size
-                if i != seq.num_prompt_blocks - 1:
-                    end = start + self.block_size
+            for i in range(0, seq.num_prompt_blocks):
+                if seq.block_cache_missed[i]: 
+                    start = seq.block_table[i] * self.block_size
+                    if i != seq.num_prompt_blocks - 1:
+                        end = start + self.block_size
+                    else:
+                        end = start + seq.last_block_prompt_num_tokens 
+                    slot_mapping.extend(list(range(start, end)))
                 else:
-                    end = start + seq.last_block_prompt_num_tokens 
-                slot_mapping.extend(list(range(start, end)))
+                    slot_mapping.extend([-1] * self.block_size)
             slot_mapping.extend([-1] * seq.diffusion_block_size)  # padding to block size
         # if cu_seqlens_k[-1] > cu_seqlens_q[-1]:    # prefix cache
         block_tables = self.prepare_block_tables(seqs)

@@ -70,6 +70,7 @@ class BlockManagerBase(ABC):
             block_id = self.hash_to_block_id.get(h, -1)
             if block_id == -1 or self.blocks[block_id].token_ids != token_ids:
                 cache_miss = True
+            seq.block_cache_missed.append(cache_miss)
             if cache_miss:
                 block_id = self.free_block_ids[0]
                 block = self._allocate_block(block_id)
