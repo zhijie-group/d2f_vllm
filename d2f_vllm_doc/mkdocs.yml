@@ -1,0 +1,10 @@
+theme:
+  name: bootstrap
+site_name: D2F-vLLM
+nav:
+  - Home: index.md
+  - User Guide:
+    - Install from Source: user-guide/1-install.md
+  - Implementation Introduction:
+    - Overview: impl/overview.md
+  - License: license.md
