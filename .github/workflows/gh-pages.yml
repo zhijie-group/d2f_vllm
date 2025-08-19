@@ -23,7 +23,7 @@ jobs:
           pip install mkdocs mkdocs-bootstrap
 
       - name: Build MkDocs site
-        run: mkdocs build --clean
+        run: cd d2f_vllm_doc && mkdocs build --clean
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
