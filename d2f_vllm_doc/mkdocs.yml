@@ -1,6 +1,8 @@
 theme:
   name: superhero
 site_name: D2F-vLLM
+site_url: https://zhijie-group.github.io/d2f.vllm.ai
+site_author: D2F Team (SJTU DENG Lab)
 nav:
   - Home: index.md
   - User Guide:
@@ -14,3 +16,4 @@ nav:
     - Model Registry: impl/5_model_registry.md
     - Kernels: impl/6_kernels.md
   - License: license.md
+  
