@@ -105,6 +105,9 @@ class Attention(nn.Module):
             # Block PK
             if context.block_tables is not None and self.model_type == 'causal_lm':
                 k, v = k_cache, v_cache
+            elif context.block_tables is not None and self.model_type == 'diffusion_lm':
+                # TODO: Implement Prefix Caching
+                pass
 
             # Attention computation
             q_t, k_t, v_t = [transpose_fn(t) for t in (q, k, v)]
@@ -126,8 +129,6 @@ class Attention(nn.Module):
                 diffusion_block_size = config.diffusion_block_size
                 if is_unified_layout:
                     q_t = transpose_fn(q)
-                    if context.block_mask.shape == torch.Size([288, 824]):
-                        pass
                     k_comb, v_comb = load_kvcache(self.k_cache, self.v_cache, context, k, v)
                     # k_comb, v_comb = CHECK_LOADING(k_comb, v_comb, k, v, k_cache, v_cache, context)``
                     k_t, v_t = transpose_fn(k_comb), transpose_fn(v_comb)

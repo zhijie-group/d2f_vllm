@@ -156,31 +156,7 @@ def store_kvcache_unified_layout(key: torch.Tensor, value: torch.Tensor,
     assert key.stride(-1) == 1 and value.stride(-1) == 1
     assert key.stride(1) == head_dim and value.stride(1) == head_dim
     assert k_cache.stride(1) == D and v_cache.stride(1) == D
-    assert N == slot_mapping.numel()
-    # try:
-    #     assert N == slot_mapping.numel()
-    # except:
-    #     start_idx = 0
-    #     tensor = torch.tensor
-    #     for seq in context.seqs:
-    #         to_cache_and_active_blocks = tensor(seq.active_blocks) | tensor(seq.to_cache_blocks)
-    #         to_cache_and_active_blocks = to_cache_and_active_blocks.to(slot_mapping.device)
-    #         cur_slot_mapping_ref = []
-    #         for idx, block in enumerate(to_cache_and_active_blocks):
-    #             if block:
-    #                 if seq.active_blocks[idx]:
-    #                     cur_slot_mapping_ref.extend([-1] * seq.diffusion_block_size)
-    #                 else:
-    #                     cur_slot_mapping_ref.extend([0] * seq.diffusion_block_size)
-    #         cur_slot_mapping_ref = tensor(cur_slot_mapping_ref).to(slot_mapping.device)
-    #         temp_slot_mapping = slot_mapping[start_idx:start_idx + len(cur_slot_mapping_ref)]
-    #         start_idx += len(cur_slot_mapping_ref)
-    #         print("="*40)
-    #         print("to_cache_blocks", seq.to_cache_blocks)
-    #         print("active_blocks", seq.active_blocks)
-    #         print("temp_slot_mapping", temp_slot_mapping.tolist())
-    #         print("cur_slot_mapping_ref", cur_slot_mapping_ref.tolist())
-    #         print("diff", (temp_slot_mapping - cur_slot_mapping_ref).tolist())
+    assert N == slot_mapping.numel(), f"`N`: {N}, `slot_mapping.numel()`: {slot_mapping.numel()}"
 
     if model_type == 'causal_lm':
         store_kvcache_kernel_causal_lm[(N,)](

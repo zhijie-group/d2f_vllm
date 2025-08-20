@@ -43,7 +43,7 @@
             "name": "PyDbg: `d2f_vllm` Dream `HumanEval`",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/demo/test_dream_dvllm_human_eval.py",
+            "program": "${workspaceFolder}/examples/test_dream_dvllm_human_eval.py",
             "console": "integratedTerminal",
             "env": {
                 // "TORCHINDUCTOR_DISABLE": "1",
@@ -55,12 +55,12 @@
             "name": "PyDbg: `d2f_vllm` Dream `GSM8K`",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/demo/test_dream_dvllm_gsm8k.py",
+            "program": "${workspaceFolder}/examples/test_dream_dvllm_gsm8k.py",
             "console": "integratedTerminal",
             "env": {
                 // "TORCHINDUCTOR_DISABLE": "1",
                 // "TRITON_INTERPRET": "1",
-                "CUDA_VISIBLE_DEVICES": "0,1"
+                // "CUDA_VISIBLE_DEVICES": "0,1"
             }
         },
         {

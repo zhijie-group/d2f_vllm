@@ -63,7 +63,7 @@ class ModelRunnerBase(ABC):
                     shm.unlink()
                 except FileNotFoundError:
                     pass
-                shm_size = 2**23 if self.model_type == "diffusion_lm" else 2**20
+                shm_size = 2**25 if self.model_type == "diffusion_lm" else 2**20
                 self.shm = SharedMemory(name=config.shm_name, create=True, size=shm_size)
                 dist.barrier()
             else:
@@ -510,6 +510,8 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
         seq_lens = []
         seq_id_to_queue_id = {}
         need_kv_cache_store = False
+        # if sum((sum(seq.active_blocks) + sum(seq.to_cache_blocks)) * seq.diffusion_block_size for seq in seqs) == 1536:
+        #     pass
         for seq_idx_in_queue, seq in enumerate(seqs): 
             seq_id = seq.seq_id
             seq_id_to_queue_id[seq_id] = seq_idx_in_queue
@@ -529,7 +531,7 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
 
             mem_block_to_diffusion_blocks_map = seq.mem_block_to_diffusion_blocks_map
             context_len = context_lens[seq_id_to_queue_id[seq_id]]
-            for mem_block_idx in range(seq.num_cached_blocks, seq.num_blocks):
+            for mem_block_idx in range(0, seq.num_blocks):
                 start_idx = mem_block_idx * seq.block_size
                 end_idx = start_idx + seq.block_size
                 cur_map = mem_block_to_diffusion_blocks_map[mem_block_idx]
@@ -538,19 +540,21 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
                 while start_idx < end_idx and not is_last_block and not meet_active_block:
                     local_start_idx = lambda: start_idx % seq.block_size
                     diffusion_block = seq.diffusion_blocks[cur_map[local_start_idx()]]
+                    if diffusion_block.block_id == 0 and diffusion_block.cursor != start_idx:
+                        diffusion_block.cursor = start_idx
                     if cur_map[local_start_idx()] == seq.num_diffusion_blocks - 1:
                         is_last_block = True
-                    get_step = lambda diff_blk: (
-                        diff_blk.remaining_length
-                        if diff_blk.remaining_length + local_start_idx() <= seq.block_size
+                    get_step = lambda diff_blk, start_idx: (
+                        diff_blk.remaining_length(start_idx)
+                        if diff_blk.remaining_length(start_idx) + local_start_idx() <= seq.block_size
                         else seq.block_size - local_start_idx()
                     )
                     if diffusion_block.is_in_cache:
-                        step = get_step(diffusion_block)
+                        step = get_step(diffusion_block, start_idx)
                         diffusion_block.cursor += step
                         start_idx += step
                     elif diffusion_block.is_to_cache:
-                        step = get_step(diffusion_block)
+                        step = get_step(diffusion_block, start_idx)
                         diffusion_block.cursor += step
                         cur_diffusion_block_start = 0
                         cur_diffusion_block_end = step
@@ -572,8 +576,9 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
                         padding_slots = [-1] * (num_blocks_to_pad * seq.diffusion_block_size)
                         slot_mapping.extend(padding_slots)
                     break
-        
-        # CHECK_SLOT_MAPPING(seqs, slot_mapping)
+            assert len(input_ids) == len(slot_mapping), f"Input IDs length {len(input_ids)} does not match slot mapping length {len(slot_mapping)}"
+
+        CHECK_SLOT_MAPPING(seqs, slot_mapping)
         input_ids = torch.tensor(input_ids, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
         positions = torch.tensor(positions, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
         seq_lens_ts = torch.tensor(seq_lens, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)

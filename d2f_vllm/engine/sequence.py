@@ -188,9 +188,8 @@ class DiffusionBlock:
         in_cache_blocks = list(range(sum(self.seq.in_cache_blocks)))
         offset -= sum(self.seq.diffusion_blocks[block_id].size for block_id in in_cache_blocks)
         return [mask_token_id + offset for mask_token_id in self.local_mask_token_ids]
-    
-    @property
-    def remaining_length(self) -> int:
+
+    def remaining_length(self, start_idx: int) -> int:
         return self.size - self.cursor
         
     def to_cache(self) -> None:
@@ -252,6 +251,7 @@ class SequenceForDiffusionLM(SequenceBase):
             "num_prompt_tokens": self.num_prompt_tokens,
             "num_cached_tokens": self.num_cached_tokens,
             "block_table": self.block_table,
+            "block_cache_missed": self.block_cache_missed,
             "temperature": self.temperature,
             "max_tokens": self.max_tokens,
             "ignore_eos": self.ignore_eos,
@@ -281,6 +281,7 @@ class SequenceForDiffusionLM(SequenceBase):
         self.num_prompt_tokens = state["num_prompt_tokens"]
         self.num_cached_tokens = state["num_cached_tokens"]
         self.block_table = state["block_table"]
+        self.block_cache_missed = state["block_cache_missed"]
         self.temperature = state["temperature"]
         self.max_tokens = state["max_tokens"]
         self.ignore_eos = state["ignore_eos"]

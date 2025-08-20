@@ -17,6 +17,8 @@ def CHECK_SLOT_MAPPING(seqs, slot_mapping):
                     assert slot == -1
                 elif ref_slot == 0:
                     assert slot != -1
+                elif ref_slot is not None:
+                    assert slot is not None
             except AssertionError:
                 raise ValueError(f"Slot mapping mismatch: {slot} != {ref_slot}. "
                                     f"Check the implementation of prepare_decode.\n"
