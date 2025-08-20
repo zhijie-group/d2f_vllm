@@ -1,10 +1,16 @@
 theme:
-  name: bootstrap
+  name: superhero
 site_name: D2F-vLLM
 nav:
   - Home: index.md
   - User Guide:
-    - Install from Source: user-guide/1-install.md
-  - Implementation Introduction:
-    - Overview: impl/overview.md
+    - Install from Source: user-guide/1_install.md
+  - Implementation:
+    - Overview: impl/0_overview.md
+    - Engine: impl/1_engine.md
+    - Scheduer: impl/2_scheduler.md
+    - KVCache Manager: impl/3_kvcache_manager.md
+    - Model Runner: impl/4_model_runner.md
+    - Model Registry: impl/5_model_registry.md
+    - Kernels: impl/6_kernels.md
   - License: license.md
