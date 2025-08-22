@@ -86,7 +86,27 @@ class SchedulerForCausalLM(SchedulerBase):
                 num_seqs += 1
                 self.block_manager.may_append(seq)
                 scheduled_seqs.append(seq)
-        assert scheduled_seqs
+        if not scheduled_seqs:
+            # Provide diagnostics to understand starvation/resource issues
+            diag = {
+                "phase": "decode",
+                "waiting": len(self.waiting),
+                "running": len(self.running),
+                "max_num_seqs": self.max_num_seqs,
+                "max_num_batched_tokens": self.max_num_batched_tokens,
+            }
+            # Probe a few candidates for can_append and lengths
+            candidates = list(self.running)[:3] + list(self.waiting)[:2]
+            infos = []
+            for j, s in enumerate(candidates):
+                try:
+                    cap = self.block_manager.can_append(s)
+                except Exception:
+                    cap = "error"
+                infos.append(
+                    f"[{j}] status={s.status.name}, len={len(s)}, new_tokens={getattr(s, 'num_completion_tokens', getattr(s, 'new_tokens', '?'))}, cached={getattr(s, 'num_cached_tokens', '?')}, can_append={cap}"
+                )
+            raise RuntimeError(f"SchedulerForCausalLM: unable to schedule any sequence in decode; state={diag}; details={' | '.join(infos)}")
         self.running.extendleft(reversed(scheduled_seqs))
         return scheduled_seqs, False
 
@@ -149,7 +169,26 @@ class SchedulerForDiffusionLM(SchedulerBase):
                 num_seqs += 1
                 self.block_manager.may_append(seq)
                 scheduled_seqs.append(seq)
-        assert scheduled_seqs
+        if not scheduled_seqs:
+            diag = {
+                "phase": "decode",
+                "waiting": len(self.waiting),
+                "running": len(self.running),
+                "max_num_seqs": self.max_num_seqs,
+                "max_num_batched_tokens": self.max_num_batched_tokens,
+                "diffusion_block_size": getattr(self, 'diffusion_block_size', None),
+            }
+            candidates = list(self.running)[:3] + list(self.waiting)[:2]
+            infos = []
+            for j, s in enumerate(candidates):
+                try:
+                    cap = self.block_manager.can_append(s)
+                except Exception:
+                    cap = "error"
+                infos.append(
+                    f"[{j}] status={s.status.name}, len={len(s)}, diff_block={getattr(s, 'diffusion_block_size', '?')}, new_tokens={getattr(s, 'new_tokens', '?')}, cached={getattr(s, 'num_cached_tokens', '?')}, can_append={cap}"
+                )
+            raise RuntimeError(f"SchedulerForDiffusionLM: unable to schedule any sequence in decode; state={diag}; details={' | '.join(infos)}")
         self.running.extendleft(reversed(scheduled_seqs))
         return scheduled_seqs, False
 

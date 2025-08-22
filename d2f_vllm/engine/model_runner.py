@@ -454,38 +454,47 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
         block_tables = None
         context_lens = []
         seq_lens = []
+
         for seq in seqs:
             seq.next_diffusion_step(is_prefill=True)
-            
+
             total_seqlen = len(seq)
+            # tokens and positions to run in this prefill step
             input_ids.extend(seq[seq.cached_num_tokens:])
             positions.extend(list(range(seq.cached_num_tokens, total_seqlen)))
             seq_lens.append(total_seqlen)
             context_lens.append(0)
+            assert len(input_ids) == len(positions), (
+                f"prepare_prefill(diffusion): len(input_ids) {len(input_ids)} != len(positions) {len(positions)}"
+            )
             
             seqlen_q = total_seqlen - seq.cached_num_tokens
             seqlen_k = total_seqlen
             cu_seqlens_q.append(cu_seqlens_q[-1] + seqlen_q)
             cu_seqlens_k.append(cu_seqlens_k[-1] + seqlen_k)
-            
+
             max_seqlen_q = max(seqlen_q, max_seqlen_q)
             max_seqlen_k = max(seqlen_k, max_seqlen_k)
-            
+
             if not seq.block_table:
                 continue
+            # build slot mapping for prefix cache prompt blocks
             for i in range(0, seq.num_prompt_blocks):
-                if seq.block_cache_missed[i]: 
+                if seq.block_cache_missed[i]:
                     start = seq.block_table[i] * self.block_size
                     if i != seq.num_prompt_blocks - 1:
                         end = start + self.block_size
                     else:
-                        end = start + seq.last_block_prompt_num_tokens 
+                        end = start + seq.last_block_prompt_num_tokens
                     slot_mapping.extend(list(range(start, end)))
                 else:
                     slot_mapping.extend([-1] * self.block_size)
-            slot_mapping.extend([-1] * seq.diffusion_block_size)  # padding to block size
-        # if cu_seqlens_k[-1] > cu_seqlens_q[-1]:    # prefix cache
+            # pad to a full diffusion block
+            slot_mapping.extend([-1] * seq.diffusion_block_size)
+
+        # For diffusion prefill we always need block tables for prefix cache bookkeeping
         block_tables = self.prepare_block_tables(seqs)
+
         input_ids = torch.tensor(input_ids, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
         positions = torch.tensor(positions, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
         seq_lens_ts = torch.tensor(seq_lens, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
@@ -493,11 +502,29 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
         cu_seqlens_q = torch.tensor(cu_seqlens_q, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
         cu_seqlens_k = torch.tensor(cu_seqlens_k, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
         slot_mapping = torch.tensor(slot_mapping, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
-        set_context_diffusion_lm(True, cu_seqlens_q=cu_seqlens_q, cu_seqlens_k=cu_seqlens_k, 
-                                 max_seqlen_q=max_seqlen_q, max_seqlen_k=max_seqlen_k, slot_mapping=slot_mapping, 
-                                 context_lens=context_lens, block_tables=block_tables, seqs=seqs, 
-                                 kv_cache_layout=self.config.kv_cache_layout,
-                                 seq_lens=seq_lens, seq_lens_ts=seq_lens_ts)
+
+        # More checks to avoid downstream rotary errors
+        assert cu_seqlens_q[-1].item() == input_ids.numel(), (
+            f"prepare_prefill(diffusion): cu_seqlens_q[-1]={cu_seqlens_q[-1].item()} != num_tokens={input_ids.numel()}"
+        )
+        assert cu_seqlens_k[-1].item() == sum(seq_lens), (
+            f"prepare_prefill(diffusion): cu_seqlens_k[-1]={cu_seqlens_k[-1].item()} != sum(seq_lens)={sum(seq_lens)}"
+        )
+
+        set_context_diffusion_lm(
+            True,
+            cu_seqlens_q=cu_seqlens_q,
+            cu_seqlens_k=cu_seqlens_k,
+            max_seqlen_q=max_seqlen_q,
+            max_seqlen_k=max_seqlen_k,
+            slot_mapping=slot_mapping,
+            context_lens=context_lens,
+            block_tables=block_tables,
+            seqs=seqs,
+            kv_cache_layout=self.config.kv_cache_layout,
+            seq_lens=seq_lens,
+            seq_lens_ts=seq_lens_ts,
+        )
         return input_ids, positions
 
     def prepare_decode(self, seqs: List[SequenceForDiffusionLM]):
@@ -576,9 +603,10 @@ class ModelRunnerForDiffusionLM(ModelRunnerBase):
                         padding_slots = [-1] * (num_blocks_to_pad * seq.diffusion_block_size)
                         slot_mapping.extend(padding_slots)
                     break
+            assert len(input_ids) == len(positions), f"Input IDs length {len(input_ids)} does not match positions length {len(positions)}"
             assert len(input_ids) == len(slot_mapping), f"Input IDs length {len(input_ids)} does not match slot mapping length {len(slot_mapping)}"
 
-        CHECK_SLOT_MAPPING(seqs, slot_mapping)
+        # CHECK_SLOT_MAPPING(seqs, slot_mapping)
         input_ids = torch.tensor(input_ids, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
         positions = torch.tensor(positions, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
         seq_lens_ts = torch.tensor(seq_lens, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)

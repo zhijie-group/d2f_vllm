@@ -4,9 +4,13 @@ version = "0.0.1"
 authors = [
     { name = "Drew Jin (Yijie Jin)", email = "drewjin0827@gmail.com"},
 ]
+maintainers = [
+    { name = "SJTU DENG Lab" }
+]
 description = "vLLM implementation of Diffusion LLMs (based on D2F decoding paradigm)"
 readme = "README.md"
 requires-python = ">=3.12"
+license = { file = "LICENSE" }
 dependencies = [
     "accelerate>=1.9.0",
     "bpytop>=1.0.68",
@@ -27,6 +31,11 @@ dependencies = [
     "viztracer>=1.0.4",
     "matplotlib>=3.10.5",
 ]
+
+[project.urls]
+Homepage = "https://github.com/zhijie-group/d2f_vllm"
+Repository = "https://zhijie-group.github.io/d2f_vllm"
+"Organization" = "https://github.com/zhijie-group"
 
 [tool.setuptools.packages.find]
 include = ["d2f_vllm"]

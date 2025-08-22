@@ -1,6 +1,9 @@
 import atexit
 import multiprocessing as mp
 import os
+import sys
+import traceback
+import faulthandler
 import torch
 from multiprocessing.connection import wait as mp_wait
 
@@ -14,6 +17,11 @@ from d2f_vllm.sampling_params import SamplingParams
 def _dp_child_entry(config: Config, dp_idx: int, local_devices: list[int], conn):
     """Child process entry point: create an LLMEngine for this DP rank and serve RPC via Pipe."""
     try:
+        # Enable Python-level crash diagnostics for hard crashes (segfault, OOM kill signals, etc.).
+        try:
+            faulthandler.enable(all_threads=True)
+        except Exception:
+            pass
         os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(str(x) for x in local_devices)
         cfg = Config(
             model=config.model,
@@ -71,8 +79,15 @@ def _dp_child_entry(config: Config, dp_idx: int, local_devices: list[int], conn)
             else:
                 conn.send(("err", f"unknown_cmd:{cmd}"))
     except Exception as e:
+        # Include full traceback for easier debugging and also print to stderr as a fallback.
+        tb = traceback.format_exc()
+        msg = f"{type(e).__name__}: {e}\n{tb}"
         try:
-            conn.send(("err", repr(e)))
+            conn.send(("err", msg))
+        except Exception:
+            pass
+        try:
+            print(f"[DP Child {dp_idx}] Unhandled exception:\n{msg}", file=sys.stderr, flush=True)
         except Exception:
             pass
 
@@ -127,7 +142,16 @@ class DPEngine:
     def _ask(self, replica: int, cmd: str, *args):
         conn = self.conns[replica]
         conn.send((cmd, *args))
-        tag, payload = conn.recv()
+        try:
+            tag, payload = conn.recv()
+        except EOFError:
+            p = self.ps[replica]
+            exitcode = p.exitcode
+            raise RuntimeError(
+                f"DP child #{replica} terminated unexpectedly (exitcode={exitcode}). "
+                f"This may indicate OOM or a native crash. Try setting env: "
+                f"PYTHONFAULTHANDLER=1 CUDA_LAUNCH_BLOCKING=1 TORCH_SHOW_CPP_STACKTRACES=1 to get more diagnostics."
+            )
         if tag == "ok":
             return payload
         raise RuntimeError(f"DP child #{replica} error: {payload}")
@@ -168,34 +192,85 @@ class DPEngine:
         return all(self._ask(i, "is_finished") for i in range(self.dp_size))
 
     def generate(self, prompts: List[str] | List[List[int]], sampling_params: SamplingParams | List[SamplingParams], use_tqdm: bool = True):
+        """Load-balanced generate with random shuffling and stable order restoration.
+        - Randomly shuffle inputs to balance load across DP replicas.
+        - Partition shuffled list evenly among replicas.
+        - Send to children, collect outputs, then unshuffle to original order.
+        """
+        import random
         n = len(prompts)
-        step_size = n // self.dp_size
-        results = []
+        idxs = list(range(n))
+        random.shuffle(idxs)
+        shuffled_prompts = [prompts[i] for i in idxs]
+        # Align sampling params with shuffled prompts
+        if isinstance(sampling_params, list):
+            if len(sampling_params) == n:
+                shuffled_sps = [sampling_params[i] for i in idxs]
+            elif len(sampling_params) == self.dp_size:
+                # per-shard SP; keep as-is and broadcast per-shard below
+                shuffled_sps = sampling_params
+            else:
+                shuffled_sps = [sampling_params[0]] * n
+        else:
+            shuffled_sps = sampling_params
+
+        # Even partition of shuffled inputs
+        base = n // self.dp_size
+        rem = n % self.dp_size
+        slices = {}
+        start = 0
+        for i in range(self.dp_size):
+            add = base + (1 if i < rem else 0)
+            end = start + add
+            if start < end:
+                slices[i] = (start, end)
+            start = end
+
         pending = {}
         conn_to_idx = {}
-        for i in range(self.dp_size):
-            s = i * step_size
-            e = (i + 1) * step_size if i < self.dp_size - 1 else n
-            if isinstance(sampling_params, list):
-                if len(sampling_params) == n:
-                    sp_arg = sampling_params[s:e]
-                elif len(sampling_params) == self.dp_size:
-                    sp_arg = sampling_params[i]
+        collected = {}
+        for i, (s, e) in slices.items():
+            if isinstance(shuffled_sps, list):
+                if len(shuffled_sps) == n:
+                    sp_arg = shuffled_sps[s:e]
+                elif len(shuffled_sps) == self.dp_size:
+                    sp_arg = shuffled_sps[i]
                 else:
-                    sp_arg = sampling_params[0]
+                    sp_arg = shuffled_sps[0]
             else:
-                sp_arg = sampling_params
+                sp_arg = shuffled_sps
             conn = self.conns[i]
-            conn.send(("generate", prompts[s:e], sp_arg, use_tqdm))
+            conn.send(("generate", shuffled_prompts[s:e], sp_arg, use_tqdm))
             pending[i] = True
             conn_to_idx[conn] = i
+        # Collect
         while pending:
             ready = mp_wait([self.conns[i] for i in pending.keys()])
             for conn in ready:
-                tag, payload = conn.recv()
+                try:
+                    tag, payload = conn.recv()
+                except EOFError:
+                    idx = conn_to_idx[conn]
+                    p = self.ps[idx]
+                    exitcode = p.exitcode
+                    raise RuntimeError(
+                        f"DP child #{idx} terminated unexpectedly during generate (exitcode={exitcode}). "
+                        f"Enable envs: PYTHONFAULTHANDLER=1 CUDA_LAUNCH_BLOCKING=1 TORCH_SHOW_CPP_STACKTRACES=1 for more info."
+                    )
+                idx = conn_to_idx[conn]
                 if tag == "ok":
-                    results.extend(payload)
+                    collected[idx] = payload
                 else:
-                    raise RuntimeError(f"DP child #{conn_to_idx[conn]} error: {payload}")
-                del pending[conn_to_idx[conn]]
-        return results
+                    raise RuntimeError(f"DP child #{idx} error: {payload}")
+                del pending[idx]
+        # Restore to original order
+        restored = [None] * n
+        for i, (s, e) in slices.items():
+            outs = collected.get(i, [])
+            # outs are aligned with shuffled order s:e
+            for local_k, out in enumerate(outs):
+                global_pos = s + local_k
+                orig_idx = idxs[global_pos]
+                restored[orig_idx] = out
+        assert all(x is not None for x in restored), "Mismatch in outputs after DP collection"
+        return restored

@@ -68,6 +68,8 @@ class LLMEngine:
             raise ValueError(f"Unsupported engine type: {self.engine_type}")
         
         self.scheduler.add(seq)
+        # Return seq_id so caller can build a stable mapping
+        return seq.seq_id
 
     def step(self):
         seqs, is_prefill = self.scheduler.schedule()
@@ -93,9 +95,12 @@ class LLMEngine:
             pbar = tqdm(total=len(prompts), desc="Generating", dynamic_ncols=True)
         if not isinstance(sampling_params, list):
             sampling_params = [sampling_params] * len(prompts)
-        for prompt, sp in zip(prompts, sampling_params):
-            self.add_request(prompt, sp)
-        outputs = {}
+        # Map internal seq_id -> input index to keep output order stable
+        seqid_to_idx = {}
+        for idx, (prompt, sp) in enumerate(zip(prompts, sampling_params)):
+            sid = self.add_request(prompt, sp)
+            seqid_to_idx[sid] = idx
+        outputs = [None] * len(prompts)
         prefill_throughput = decode_throughput = 0.
         n_steps = 0
         n_diff_steps = [-1] * len(prompts)
@@ -113,20 +118,22 @@ class LLMEngine:
                     "Decode": f"{int(decode_throughput)}tok/s",
                 })
             if cur_n_diff_steps:
-                first_idx = min(cur_n_diff_steps.keys())
-                for seq_idx, n_diff_step in cur_n_diff_steps.items():
-                    if n_diff_step >= 0:
-                        n_diff_steps[int(seq_idx) - first_idx] = n_diff_step
+                for seq_id, n_step in cur_n_diff_steps.items():
+                    if seq_id in seqid_to_idx and n_step >= 0:
+                        n_diff_steps[seqid_to_idx[seq_id]] = n_step
             for seq_id, token_ids in output:
-                outputs[seq_id] = token_ids
+                if seq_id in seqid_to_idx:
+                    outputs[seqid_to_idx[seq_id]] = token_ids
                 if use_tqdm:
                     pbar.update(1)
         print(f"Finished in {n_steps} steps, prefill throughput: {prefill_throughput:.2f} tok/s, decode throughput: {decode_throughput:.2f} tok/s")
-        outputs = [outputs[seq_id] for seq_id in sorted(outputs)]
-        outputs = [{"text": self.tokenizer.decode(token_ids).split(self.tokenizer.eos_token)[0], 
-                    "token_ids": token_ids[:token_ids.index(self.config.eos)] if self.config.eos in token_ids else token_ids, 
-                    "n_diff_steps": n_diff_step} 
-                   for token_ids, n_diff_step in zip(outputs, n_diff_steps)]
+        # Ensure all outputs are present
+        assert all(toks is not None for toks in outputs), "Some sequences did not produce outputs"
+        outputs = [{
+            "text": self.tokenizer.decode(token_ids).split(self.tokenizer.eos_token)[0],
+            "token_ids": token_ids[:token_ids.index(self.config.eos)] if self.config.eos in token_ids else token_ids,
+            "n_diff_steps": n_diff_step,
+        } for token_ids, n_diff_step in zip(outputs, n_diff_steps)]
         if use_tqdm:
             pbar.close()
         return outputs
