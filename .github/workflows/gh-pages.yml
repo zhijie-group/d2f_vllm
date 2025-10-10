@@ -1,4 +1,4 @@
-name: Deploy D2F-vLLM Docs to GitHub Pages
+name: Deploy D2fEngine Docs to GitHub Pages
 
 on:
   push:
@@ -26,10 +26,10 @@ jobs:
           pip install mkdocs mkdocs-material
 
       - name: Build MkDocs site
-        run: cd d2f_vllm_doc && mkdocs gh-deploy --force
+        run: cd document && mkdocs gh-deploy --force
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: d2f_vllm_doc/site
+          publish_dir: document/site
