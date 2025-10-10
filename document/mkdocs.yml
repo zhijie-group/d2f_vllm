@@ -1,7 +1,7 @@
 theme:
   name: material
 site_name: d2f_engine
-site_url: https://zhijie-group.github.io/d2f-engine.ai
+site_url: https://zhijie-group.github.io/d2fengine
 site_author: D2F Team (SJTU DENG Lab)
 nav:
   - Home: index.md
