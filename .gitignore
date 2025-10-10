@@ -28,3 +28,4 @@ log/
 dist/
 build/
 cache/
+uv.lock

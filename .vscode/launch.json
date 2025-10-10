@@ -4,6 +4,9 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [    
+    
+    
+    
         {
             "name": "PyDbg: `Dream` Accelerate Launch Debug",
             "type": "debugpy",
@@ -48,7 +51,7 @@
             "env": {
                 // "TORCHINDUCTOR_DISABLE": "1",
                 // "TRITON_INTERPRET": "1",
-                "CUDA_VISIBLE_DEVICES": "3,4"
+                "CUDA_VISIBLE_DEVICES": "0,1,2,3"
             }
         },
         {
@@ -61,6 +64,18 @@
                 // "TORCHINDUCTOR_DISABLE": "1",
                 // "TRITON_INTERPRET": "1",
                 // "CUDA_VISIBLE_DEVICES": "0,1"
+            }
+        },
+        {
+            "name": "PyDbg: `d2f_engine` LLaDA `HumanEval`",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/examples/test_llada_dvllm_human_eval.py",
+            "console": "integratedTerminal",
+            "env": {
+                // "TORCHINDUCTOR_DISABLE": "1",
+                // "TRITON_INTERPRET": "1",
+                "CUDA_VISIBLE_DEVICES": "0,1"
             }
         },
         {
