@@ -80,9 +80,13 @@ for the up-to-date compatibility matrix.
 
 ## Discussion
 
-For questions, development discussion, and collaboration, join the Discord:
+For questions, development discussion, and collaboration, join the Discord or our WeChat group:
 
 [![Join our Discord](https://img.shields.io/badge/Discord-Join%20Us-blue?logo=discord&style=for-the-badge)](https://discord.gg/NSa9WH4EKu)
+
+<p align="center">
+  <img src="./assets/imgs/wechat_group.jpg" alt="WeChat Group" width="300" />
+</p>
 
 ## Acknowledgments
 
